@@ -60,7 +60,7 @@ class TrainNode:
             loss.backward()
             dist.barrier()
 
-            # self.gradient_strategy.communicate()
+            self.gradient_strategy.communicate()
 
             self.optimizer.step()
 
