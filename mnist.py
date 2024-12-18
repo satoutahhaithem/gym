@@ -47,6 +47,8 @@ def setup_config():
     }
     config.criterion_class = torch.nn.CrossEntropyLoss
 
+    config.num_epochs = 5
+
     config.num_nodes = 4
 
     return config

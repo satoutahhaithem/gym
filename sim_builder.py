@@ -24,10 +24,18 @@ class SimBuilder:
         self.device = torch.device("cpu")
 
     def _build_dataloaders(self):
-        # TODO: distributed dataloader 
+        sampler = DistributedSampler(
+            self.config.train_dataset, 
+            num_replicas=self.config.num_nodes, 
+            rank=self.rank, 
+            shuffle=True, 
+            drop_last=True
+        )
+
         train_dataloader = DataLoader(self.config.train_dataset, 
                           batch_size=self.config.batch_size,
-                          shuffle=True)
+                          sampler=sampler)
+
         val_dataloader = DataLoader(self.config.val_dataset, 
                           batch_size=self.config.batch_size,
                           shuffle=True)
@@ -49,7 +57,7 @@ class SimBuilder:
                   self.val_dataloader,
                   self.device,
                   self.rank)
-        sim.train(epochs=100)
+        sim.train(epochs=self.config.num_epochs)
 
         self._process_cleanup()
         

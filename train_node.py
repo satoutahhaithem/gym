@@ -118,6 +118,8 @@ class TrainNode:
 
     def train(self, epochs=10):
         for epoch in range(epochs):
+            self.train_dataloader.sampler.set_epoch(epoch)
+
             val_loss, val_accuracy = self.val_epoch()
 
             if self.rank == 0:
