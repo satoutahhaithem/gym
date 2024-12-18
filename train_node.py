@@ -6,6 +6,7 @@ from typing import Optional, Callable, Type
 import os
 
 from sim_config import *
+from gradient_strategy import *
 
 class TrainNode:
     def __init__(self, 
@@ -33,6 +34,8 @@ class TrainNode:
 
         self.criterion = self.config.criterion_class(**self.config.criterion_kwargs)
 
+        self.gradient_strategy = self.config.gradient_class(self.model, self.config)
+
         # for _, param in self.model.named_parameters():
         #     print(f'Process {self.rank} params {param}')
         #     break
@@ -57,9 +60,7 @@ class TrainNode:
             loss.backward()
             dist.barrier()
 
-            for param in self.model.parameters():
-                dist.all_reduce(param.grad, op=dist.ReduceOp.SUM)
-                param.grad /= dist.get_world_size()
+            # self.gradient_strategy.communicate()
 
             self.optimizer.step()
 

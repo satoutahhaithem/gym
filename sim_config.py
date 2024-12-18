@@ -2,6 +2,8 @@ from dataclasses import dataclass, field
 from typing import Optional, Callable, Type
 import torch
 
+from gradient_strategy import *
+
 class SimConfig:
     num_nodes: int
 
@@ -17,3 +19,5 @@ class SimConfig:
 
     criterion_class: Type[torch.nn.Module]
     criterion_kwargs: dict = {}
+
+    gradient_class: Type[GradientStrategy]
