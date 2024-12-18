@@ -41,7 +41,8 @@ def setup_config():
     config = SimConfig()
 
     config.model_class = ToyModel
-    config.dataset = DotProductDataset()
+    config.train_dataset = DotProductDataset(num_samples=10000)
+    config.val_dataset = DotProductDataset(num_samples=100)
 
     config.optimizer_class = torch.optim.SGD
     config.optimizer_kwargs = {

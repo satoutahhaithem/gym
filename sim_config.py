@@ -8,8 +8,9 @@ class SimConfig:
     model_class: Type[torch.nn.Module]
     model_kwargs: dict = {}
 
-    dataset: torch.utils.data.Dataset
-    batch_size: int = 32
+    train_dataset: torch.utils.data.Dataset
+    val_dataset: torch.utils.data.Dataset
+    batch_size: int = 64
 
     optimizer_class: Type[torch.optim.Optimizer] = torch.optim.SGD
     optimizer_kwargs: dict = {}

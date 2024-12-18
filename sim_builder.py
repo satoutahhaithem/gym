@@ -23,11 +23,16 @@ class SimBuilder:
         dist.init_process_group("gloo", rank=self.rank, world_size=self.config.num_nodes)
         self.device = torch.device("cpu")
 
-    def _build_dataloader(self):
+    def _build_dataloaders(self):
         # TODO: distributed dataloader 
-        return DataLoader(self.config.dataset, 
+        train_dataloader = DataLoader(self.config.train_dataset, 
                           batch_size=self.config.batch_size,
                           shuffle=True)
+        val_dataloader = DataLoader(self.config.val_dataset, 
+                          batch_size=self.config.batch_size,
+                          shuffle=True)
+
+        return train_dataloader, val_dataloader
 
     def _process_cleanup(self):
         dist.destroy_process_group()
@@ -37,10 +42,11 @@ class SimBuilder:
         self.rank = rank
 
         self._process_setup()
-        self.dataloader = self._build_dataloader()
+        self.train_dataloader, self.val_dataloader = self._build_dataloaders()
 
         sim = TrainNode(self.config,
-                  self.dataloader,
+                  self.train_dataloader,
+                  self.val_dataloader,
                   self.device,
                   self.rank)
         sim.train(epochs=100)
