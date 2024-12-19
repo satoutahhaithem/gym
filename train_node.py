@@ -14,7 +14,6 @@ class TrainNode:
 #                  model_class: Type[torch.nn.Module],
                  train_dataloader: torch.utils.data.DataLoader,
                  val_dataloader: torch.utils.data.DataLoader,
-#                  optimizer: Type[torch.optim.Optimizer],
                  device: torch.device,
                  rank: int):
         self.config = config
@@ -34,9 +33,6 @@ class TrainNode:
         for _, param in self.model.named_parameters():
             dist.broadcast(param.data, src=0)
 
-        self.optimizer = self.config.optimizer_class(self.model.parameters(),
-                                                     **self.config.optimizer_kwargs)
-
         self.criterion = self.config.criterion_class(**self.config.criterion_kwargs)
 
         self.gradient_strategy = self.config.gradient_class(self.model, self.config)
@@ -54,25 +50,26 @@ class TrainNode:
         loss_sum = torch.tensor(0, device=self.device)
 
         for i, batch in enumerate(self.train_dataloader, 0):
-            self.optimizer.zero_grad()
+            self.gradient_strategy.zero_grad()
 
             X, y = batch
             yhat = self.model.forward(X)
 
             loss = self.criterion(yhat, y)
 
-            # TODO: AllReduce is currently doing the default - summing gradients (high bandwidth cost) 
+            
             loss.backward()
             dist.barrier()
 
+            # for name, param in self.model.named_parameters():
+            #     print(f'\nPre-sync - process {self.rank} {name} gradient {param.grad[:,0]}')
+            #     break
+
             self.gradient_strategy.step()
 
-            # optimizer step is now contained within gradient_strategy step
-            # self.optimizer.step()
-
-            for name, param in self.model.named_parameters():
-#                 print(f'\nProcess {self.rank} {name} gradient {param.grad}')
-                break
+            # for name, param in self.model.named_parameters():
+            #     print(f'\nPost-sync - process {self.rank} {name} gradient {param.grad[:,0]}')
+            #     break
 
             loss_sum = torch.add(loss_sum, loss)
 
@@ -124,6 +121,8 @@ class TrainNode:
 
 
     def train(self, epochs=10):
+        losses = []
+
         for epoch in range(epochs):
             self.train_dataloader.sampler.set_epoch(epoch)
 
@@ -131,6 +130,9 @@ class TrainNode:
 
             if self.rank == 0:
                 print(val_loss / (len(self.val_dataloader) * self.config.batch_size), val_accuracy)
+            
+            losses.append((val_loss, val_accuracy))
 
             train_loss = self.train_epoch()
 
+        return losses

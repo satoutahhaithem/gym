@@ -2,6 +2,7 @@ import torch
 import torch.distributed as dist
 from torch.distributed import init_process_group, destroy_process_group
 from torch.utils.data import DataLoader, DistributedSampler
+from torch.multiprocessing import Queue
 
 import os
 from tqdm import tqdm
@@ -45,8 +46,7 @@ class SimBuilder:
     def _process_cleanup(self):
         dist.destroy_process_group()
 
-
-    def _execute(self, rank):
+    def _execute(self, rank, queue):
         self.rank = rank
 
         self._process_setup()
@@ -57,10 +57,25 @@ class SimBuilder:
                   self.val_dataloader,
                   self.device,
                   self.rank)
-        sim.train(epochs=self.config.num_epochs)
+
+        
+        # Capture losses during training
+        losses = sim.train(epochs=self.config.num_epochs)
+
+        # Send metrics to the main process
+        queue.put({'rank': self.rank, 'losses': losses})
 
         self._process_cleanup()
         
 
     def execute(self):
-        torch.multiprocessing.spawn(self._execute, args=(), nprocs=self.config.num_nodes, join=True)
+        queue = Queue()
+
+        torch.multiprocessing.spawn(self._execute, args=(queue,), nprocs=self.config.num_nodes, join=True)
+
+        metrics = []
+        while not queue.empty():
+            metrics.append(queue.get())
+
+        # Log or process metrics
+        print("Collected metrics from all nodes:", metrics)

@@ -42,13 +42,13 @@ d_model = 32
 dim_ff = 64
 
 batch_size = 64
-epochs = 10
+epochs = 3
 
 num_nodes = 4
 
 
 def main():
-    config = setup_config()
+    config = setup_config(trim_dataset=1000)
 
     # # Firstly, train with no DeMo
     # config.graident_class = SimpleReduceGradient
@@ -70,7 +70,6 @@ def main():
         simbuilder = SimBuilder(config)
         simbuilder.execute()
 
-        
     
 if __name__ == '__main__':
     os.environ['VERBOSITY'] = '1'

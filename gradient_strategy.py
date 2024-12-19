@@ -19,6 +19,9 @@ class GradientStrategy:
     def step(self):
         pass
 
+    def zero_grad(self):
+        self.optim.zero_grad()
+
 class SimpleReduceGradient(GradientStrategy):
     def __init__(self, model, config):
         super().__init__(model, config)
@@ -33,7 +36,6 @@ class SimpleReduceGradient(GradientStrategy):
 
         self.optim.step()
 
-        
 
 class DeMoGradient(GradientStrategy):
     def __init__(self, model, config):
@@ -41,8 +43,8 @@ class DeMoGradient(GradientStrategy):
 
         print('initialising DeMo engine')
 
-        self.demo = DeMo(model.parameters(), **config.optimizer_kwargs)
+        self.optim = DeMo(model.parameters(), **config.optimizer_kwargs)
 
     def step(self):
         # DeMo communicates gradients and then does optimizer step.
-        self.demo.step()
+        self.optim.step()

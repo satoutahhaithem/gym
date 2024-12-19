@@ -116,7 +116,7 @@ class TransformerModel(nn.Module):
 
 # Utils
 
-def build_dataset(sentences_file):
+def build_dataset(sentences_file, trim_dataset=None):
     print('Importing sentences...')
 
     sentences = []
@@ -154,16 +154,20 @@ def build_dataset(sentences_file):
     random.shuffle(common_sentences)
 
     sentence_verb = '. '.join([x.strip() for x in common_sentences])
+    print(trim_dataset)
+    if trim_dataset:
+        sentence_verb = sentence_verb[:trim_dataset]
+        print(f'trimming dataset to length {len(sentence_verb)}')
 
     print(f'dataset of {len(common_sentences)} sentences')
 
     return TextDataset(sentence_verb[:int(tt_split * len(sentence_verb))]), \
         TextDataset(sentence_verb[int(tt_split * len(sentence_verb)):])
 
-def setup_config():
+def setup_config(trim_dataset=None):
     config = SimConfig()
 
-    config.train_dataset, config.val_dataset = build_dataset(sentences_file)
+    config.train_dataset, config.val_dataset = build_dataset(sentences_file, trim_dataset=trim_dataset)
 
     config.model_class = TransformerModel
     config.model_kwargs = {
@@ -192,8 +196,12 @@ def setup_config():
     return config
 
 def main():
-    config = setup_config()
+    config = setup_config(trim_dataset=None)
 
+    config.optimizer_kwargs = {
+        'lr': 0.01,
+        'compression_topk': 2,
+    }
     simbuilder = SimBuilder(config)
 
     simbuilder.execute()
