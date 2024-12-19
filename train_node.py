@@ -24,7 +24,12 @@ class TrainNode:
         self.device = device
         self.rank = rank
 
-        self.model = self.config.model_class().to(self.device) # TODO: model kwargs
+        self.model = self.config.model_class(**self.config.model_kwargs).to(self.device) # TODO: model kwargs
+        
+        # def print_grad(grad):
+        #     print(grad)
+        # self.model.encoder_layer.self_attn.in_proj_weight.register_hook(print_grad)
+
         ## Ensure all process models share the same params
         for _, param in self.model.named_parameters():
             dist.broadcast(param.data, src=0)
@@ -60,9 +65,10 @@ class TrainNode:
             loss.backward()
             dist.barrier()
 
-            self.gradient_strategy.communicate()
+            self.gradient_strategy.step()
 
-            self.optimizer.step()
+            # optimizer step is now contained within gradient_strategy step
+            # self.optimizer.step()
 
             for name, param in self.model.named_parameters():
 #                 print(f'\nProcess {self.rank} {name} gradient {param.grad}')
@@ -127,3 +133,4 @@ class TrainNode:
                 print(val_loss / (len(self.val_dataloader) * self.config.batch_size), val_accuracy)
 
             train_loss = self.train_epoch()
+

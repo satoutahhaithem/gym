@@ -9,7 +9,7 @@ import torchvision.transforms as transforms
 from sim_builder import *
 from sim_config import *
 from gradient_strategy import *
-# from demo import *
+from demo import *
 
 class CNN(nn.Module):
     def __init__(self):
@@ -43,11 +43,11 @@ def setup_config():
 
     config.model_class = CNN
 
-    config.optimizer_class = torch.optim.Adam
-    config.optimizer_kwargs = {
-            'lr': 0.01
-    }
-    # config.optimizer_class = DeMo
+    # config.optimizer_class = torch.optim.Adam
+    # config.optimizer_kwargs = {
+    #         'lr': 0.01
+    # }
+    config.optimizer_class = DeMo
     config.criterion_class = torch.nn.CrossEntropyLoss
 
     config.gradient_class = SimpleReduceGradient
