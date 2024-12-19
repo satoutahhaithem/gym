@@ -49,6 +49,8 @@ class TrainNode:
 
         loss_sum = torch.tensor(0, device=self.device)
 
+        train_loss_list = []
+
         for i, batch in enumerate(self.train_dataloader, 0):
             self.gradient_strategy.zero_grad()
 
@@ -56,22 +58,14 @@ class TrainNode:
             yhat = self.model.forward(X)
 
             loss = self.criterion(yhat, y)
-
             
             loss.backward()
             dist.barrier()
 
-            # for name, param in self.model.named_parameters():
-            #     print(f'\nPre-sync - process {self.rank} {name} gradient {param.grad[:,0]}')
-            #     break
-
             self.gradient_strategy.step()
 
-            # for name, param in self.model.named_parameters():
-            #     print(f'\nPost-sync - process {self.rank} {name} gradient {param.grad[:,0]}')
-            #     break
-
             loss_sum = torch.add(loss_sum, loss)
+            train_loss_list.append(loss.item())
 
             if i % 100 == 0:
                 dist.barrier()
@@ -82,12 +76,10 @@ class TrainNode:
                     print(f'step {i}/{len(self.train_dataloader)}: ' + \
                         f'loss {(loss.item() / self.config.batch_size):.6f}')
 
-        # print(f'\n Process {self.rank} train loss {loss_sum}')
+        # dist.barrier()
+        # dist.all_reduce(loss_sum, op=dist.ReduceOp.SUM)
 
-        dist.barrier()
-        dist.all_reduce(loss_sum, op=dist.ReduceOp.SUM)
-
-        return loss_sum
+        return train_loss_list
 
     def val_epoch(self):
         self.model.eval()
@@ -121,7 +113,8 @@ class TrainNode:
 
 
     def train(self, epochs=10):
-        losses = []
+        val_losses = []
+        train_losses = []
 
         for epoch in range(epochs):
             self.train_dataloader.sampler.set_epoch(epoch)
@@ -131,8 +124,9 @@ class TrainNode:
             if self.rank == 0:
                 print(val_loss / (len(self.val_dataloader) * self.config.batch_size), val_accuracy)
             
-            losses.append((val_loss, val_accuracy))
+            val_losses.append((val_loss, val_accuracy))
 
-            train_loss = self.train_epoch()
+            train_loss_list = self.train_epoch()
+            train_losses += train_loss_list
 
-        return losses
+        return val_losses, train_losses

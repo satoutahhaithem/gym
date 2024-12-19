@@ -6,6 +6,7 @@ from torch.multiprocessing import Queue
 
 import os
 from tqdm import tqdm
+import pandas as pd
 
 from sim_config import *
 from train_node import *
@@ -60,10 +61,10 @@ class SimBuilder:
 
         
         # Capture losses during training
-        losses = sim.train(epochs=self.config.num_epochs)
+        val_losses, train_losses = sim.train(epochs=self.config.num_epochs)
 
         # Send metrics to the main process
-        queue.put({'rank': self.rank, 'losses': losses})
+        queue.put({'rank': self.rank, 'val_losses': val_losses, 'train_losses': train_losses})
 
         self._process_cleanup()
         
@@ -77,5 +78,14 @@ class SimBuilder:
         while not queue.empty():
             metrics.append(queue.get())
 
-        # Log or process metrics
-        print("Collected metrics from all nodes:", metrics)
+        pd.DataFrame({
+            f'rank{x['rank']}trainloss':x['train_losses'] for x in metrics
+        }).to_parquet('log/train_loss.pq')
+
+        pd.DataFrame({
+            f'rank{x['rank']}valloss':x['val_losses'][0] for x in metrics
+        }).to_parquet('log/val_loss.pq')
+
+        pd.DataFrame({
+            f'rank{x['rank']}valacc':x['val_losses'][1] for x in metrics
+        }).to_parquet('log/val_accuracy.pq')

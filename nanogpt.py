@@ -40,7 +40,7 @@ d_model = 32
 dim_ff = 64
 
 batch_size = 64
-epochs = 10
+epochs = 3
 
 num_nodes = 4
 tt_split = 0.9
@@ -200,7 +200,7 @@ def main():
 
     config.optimizer_kwargs = {
         'lr': 0.01,
-        'compression_topk': 2,
+        'compression_topk': 32,
     }
     simbuilder = SimBuilder(config)
 
