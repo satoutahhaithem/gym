@@ -35,12 +35,15 @@ tt_split = 0.9
 word_count_threshold = 1000
 
 vocab_size = 28  # a-z and space, . chars
-embed_size = 256
-hidden_size = 512
-batch_size = 64
 context_len = 64
+d_model = 32
+dim_ff = 64
 
+batch_size = 64
 epochs = 10
+
+num_nodes = 4
+tt_split = 0.9
 
 
 ## Classes
@@ -164,10 +167,10 @@ def setup_config():
 
     config.model_class = TransformerModel
     config.model_kwargs = {
-        'vocab_size':28,
+        'vocab_size':vocab_size,
         'context_len':context_len,
-        'd_model':32,
-        'dim_ff':64,
+        'd_model':d_model,
+        'dim_ff':dim_ff,
     }
 
     # config.gradient_class = SimpleReduceGradient
@@ -182,9 +185,9 @@ def setup_config():
     config.criterion_class = torch.nn.CrossEntropyLoss
 
 
-    config.num_epochs = 5
+    config.num_epochs = epochs
 
-    config.num_nodes = 4
+    config.num_nodes = num_nodes
 
     return config
 

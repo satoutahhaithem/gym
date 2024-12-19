@@ -41,7 +41,7 @@ class DeMoGradient(GradientStrategy):
 
         print('initialising DeMo engine')
 
-        self.demo = DeMo(model.parameters())
+        self.demo = DeMo(model.parameters(), **config.optimizer_kwargs)
 
     def step(self):
         # DeMo communicates gradients and then does optimizer step.
