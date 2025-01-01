@@ -25,31 +25,16 @@ def default_connection_callback(self):
     self.device = torch.device("cpu")
 
 class SimBuilder:
+    '''
+    SimBuilder is used to spawn processes and connect them together for distributed training.
+    Spawns multiple TrainNode instances. TrainNode should be the same no matter rank topology/architecture.
+    '''
     def __init__(self, 
                  config: SimConfig):
         self.config = config
 
         if not self.config.connection_callback:
             self.config.connection_callback = default_connection_callback
-
-    def _build_dataloaders(self):
-        sampler = DistributedSampler(
-            self.config.train_dataset, 
-            num_replicas=self.config.num_nodes, 
-            rank=self.rank, 
-            shuffle=True, 
-            drop_last=True
-        )
-
-        train_dataloader = DataLoader(self.config.train_dataset, 
-                          batch_size=self.config.batch_size,
-                          sampler=sampler)
-
-        val_dataloader = DataLoader(self.config.val_dataset, 
-                          batch_size=self.config.batch_size,
-                          shuffle=True)
-
-        return train_dataloader, val_dataloader
 
     def _process_cleanup(self):
         dist.destroy_process_group()
@@ -59,11 +44,8 @@ class SimBuilder:
 
         # This line can be made less stupid by having the callback defined using class inheretence?
         self.config.connection_callback(self)
-        self.train_dataloader, self.val_dataloader = self._build_dataloaders()
 
         sim = TrainNode(self.config,
-                  self.train_dataloader,
-                  self.val_dataloader,
                   self.device,
                   self.rank)
 

@@ -1,6 +1,7 @@
 import torch
 import torch.distributed as dist
 from torch.distributed import init_process_group, destroy_process_group
+from torch.utils.data import DataLoader, DistributedSampler
 
 from typing import Optional, Callable, Type
 import os
@@ -9,21 +10,19 @@ from sim_config import *
 from gradient_strategy import *
 
 class TrainNode:
+    '''
+    Single node of distributed training process. Should be the same regardless of rank topology/architecture.
+    '''
     def __init__(self, 
                  config: SimConfig,
-#                  model_class: Type[torch.nn.Module],
-                 train_dataloader: torch.utils.data.DataLoader,
-                 val_dataloader: torch.utils.data.DataLoader,
                  device: torch.device,
                  rank: int):
         self.config = config
 
-        self.train_dataloader = train_dataloader
-        self.val_dataloader = val_dataloader
         self.device = device
         self.rank = rank
 
-        self.model = self.config.model_class(**self.config.model_kwargs).to(self.device) # TODO: model kwargs
+        self.model = self.config.model_class(**self.config.model_kwargs).to(self.device)
         
         # def print_grad(grad):
         #     print(grad)
@@ -37,9 +36,30 @@ class TrainNode:
 
         self.gradient_strategy = self.config.gradient_class(self.model, self.config)
 
+        self.build_dataloaders()
+
         # for _, param in self.model.named_parameters():
         #     print(f'Process {self.rank} params {param}')
         #     break
+
+    
+    def build_dataloaders(self):
+        sampler = DistributedSampler(
+            self.config.train_dataset, 
+            num_replicas=self.config.num_nodes, 
+            rank=self.rank, 
+            shuffle=True, 
+            drop_last=True
+        )
+
+        self.train_dataloader = DataLoader(self.config.train_dataset, 
+                          batch_size=self.config.batch_size,
+                          sampler=sampler)
+
+        self.val_dataloader = DataLoader(self.config.val_dataset, 
+                          batch_size=self.config.batch_size,
+                          shuffle=True)
+
 
     def train_epoch(self):
         self.model.train()
