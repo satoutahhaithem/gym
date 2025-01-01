@@ -202,7 +202,7 @@ def main():
         'lr': 0.01,
         'compression_topk': 32,
     }
-    simbuilder = SimBuilder(config)
+    simbuilder = LocalSimBuilder(config)
 
     simbuilder.execute()
 

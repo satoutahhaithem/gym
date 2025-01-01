@@ -11,18 +11,6 @@ import pandas as pd
 from sim_config import *
 from train_node import *
 
-def default_connection_callback(self):
-    '''
-    This is the default callback for setting up pytorch distributed connections.
-    All ranks are assumed to be on the same machine, and device is defaulted to cpu.
-    '''
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '12355'
-
-    # initialize the process group
-    # TODO: doesn't have to be gloo & cpu
-    dist.init_process_group("gloo", rank=self.rank, world_size=self.config.num_nodes)
-    self.device = torch.device("cpu")
 
 class SimBuilder:
     '''
@@ -33,8 +21,9 @@ class SimBuilder:
                  config: SimConfig):
         self.config = config
 
-        if not self.config.connection_callback:
-            self.config.connection_callback = default_connection_callback
+    @abstractmethod
+    def _build_connection(self):
+        raise NotImplementedError
 
     def _process_cleanup(self):
         dist.destroy_process_group()
@@ -42,8 +31,7 @@ class SimBuilder:
     def _execute(self, rank, queue):
         self.rank = rank
 
-        # This line can be made less stupid by having the callback defined using class inheretence?
-        self.config.connection_callback(self)
+        self._build_connection()
 
         sim = TrainNode(self.config,
                   self.device,
@@ -81,3 +69,17 @@ class SimBuilder:
         }).mean(axis=1)
 
         return train_loss_series, val_loss_series, val_accuracy_series
+
+class LocalSimBuilder(SimBuilder):
+    def _build_connection(self):
+        '''
+        This is the default callback for setting up pytorch distributed connections.
+        All ranks are assumed to be on the same machine, and device is defaulted to cpu.
+        '''
+        os.environ['MASTER_ADDR'] = 'localhost'
+        os.environ['MASTER_PORT'] = '12355'
+
+        # initialize the process group
+        # TODO: doesn't have to be gloo & cpu
+        dist.init_process_group("gloo", rank=self.rank, world_size=self.config.num_nodes)
+        self.device = torch.device("cpu")

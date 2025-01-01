@@ -57,7 +57,7 @@ def setup_config():
 def main():
     config = setup_config()
 
-    simbuilder = SimBuilder(config)
+    simbuilder = LocalSimBuilder(config)
 
     simbuilder.execute()
 

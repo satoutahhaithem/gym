@@ -58,7 +58,7 @@ def main():
     # config.optimizer_class = torch.optim.SGD
     # config.optimizer_kwargs = {'lr': 0.01}
 
-    # simbuilder = SimBuilder(config)
+    # simbuilder = LocalSimBuilder(config)
     # simbuilder.execute()
 
     # Next, we train with DeMo
@@ -74,7 +74,7 @@ def main():
             'compression_topk': topk,
         }
 
-        simbuilder = SimBuilder(config)
+        simbuilder = LocalSimBuilder(config)
         train_loss_series, val_loss_series, val_accuracy_series = \
             simbuilder.execute()
 
