@@ -49,6 +49,9 @@ num_nodes = 4
 
 def main():
     config = setup_config(trim_dataset=1000)
+    config = setup_config(trim_dataset=None)
+
+    topk_list = [1, 4, 16]
 
     # # Firstly, train with no DeMo
     # config.graident_class = SimpleReduceGradient
@@ -59,7 +62,11 @@ def main():
     # simbuilder.execute()
 
     # Next, we train with DeMo
-    for topk in [8, 16, 32, 64, 128]:
+    train_losses = []
+    val_losses = []
+    val_accuracies = []
+
+    for topk in topk_list:
         config.graident_class = DeMoGradient
         config.optimizer_class = None
         config.optimizer_kwargs = {
@@ -68,8 +75,20 @@ def main():
         }
 
         simbuilder = SimBuilder(config)
-        simbuilder.execute()
+        train_loss_series, val_loss_series, val_accuracy_series = \
+            simbuilder.execute()
 
+        train_losses.append(train_loss_series)
+        val_losses.append(val_loss_series)
+        val_accuracies.append(val_accuracy_series)
+
+    train_loss_df = pd.DataFrame({f'loss_{k}':x for k, x in zip(topk_list, train_losses)})
+    val_loss_df = pd.DataFrame({f'loss_{k}':x for k, x in zip(topk_list, val_losses)})
+    val_accuracy_df = pd.DataFrame({f'accuracy_{k}':x for k, x in zip(topk_list, val_accuracies)})
+    
+    train_loss_df.to_parquet('log/train_loss.pq')
+    val_loss_df.to_parquet('log/val_loss.pq')
+    val_accuracy_df.to_parquet('log/val_accuracy.pq')
     
 if __name__ == '__main__':
     os.environ['VERBOSITY'] = '1'

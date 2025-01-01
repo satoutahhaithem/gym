@@ -78,14 +78,16 @@ class SimBuilder:
         while not queue.empty():
             metrics.append(queue.get())
 
-        pd.DataFrame({
+        train_loss_series = pd.DataFrame({
             f'rank{x['rank']}trainloss':x['train_losses'] for x in metrics
-        }).to_parquet('log/train_loss.pq')
+        }).mean(axis=1)
 
-        pd.DataFrame({
+        val_loss_series = pd.DataFrame({
             f'rank{x['rank']}valloss':x['val_losses'][0] for x in metrics
-        }).to_parquet('log/val_loss.pq')
+        }).mean(axis=1)
 
-        pd.DataFrame({
+        val_accuracy_series = pd.DataFrame({
             f'rank{x['rank']}valacc':x['val_losses'][1] for x in metrics
-        }).to_parquet('log/val_accuracy.pq')
+        }).mean(axis=1)
+
+        return train_loss_series, val_loss_series, val_accuracy_series
