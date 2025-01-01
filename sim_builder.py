@@ -11,19 +11,26 @@ import pandas as pd
 from sim_config import *
 from train_node import *
 
+def default_connection_callback(self):
+    '''
+    This is the default callback for setting up pytorch distributed connections.
+    All ranks are assumed to be on the same machine, and device is defaulted to cpu.
+    '''
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '12355'
+
+    # initialize the process group
+    # TODO: doesn't have to be gloo & cpu
+    dist.init_process_group("gloo", rank=self.rank, world_size=self.config.num_nodes)
+    self.device = torch.device("cpu")
+
 class SimBuilder:
     def __init__(self, 
                  config: SimConfig):
         self.config = config
 
-    def _process_setup(self):
-        os.environ['MASTER_ADDR'] = 'localhost'
-        os.environ['MASTER_PORT'] = '12355'
-
-        # initialize the process group
-        # TODO: doesn't have to be gloo & cpu
-        dist.init_process_group("gloo", rank=self.rank, world_size=self.config.num_nodes)
-        self.device = torch.device("cpu")
+        if not self.config.connection_callback:
+            self.config.connection_callback = default_connection_callback
 
     def _build_dataloaders(self):
         sampler = DistributedSampler(
@@ -50,7 +57,8 @@ class SimBuilder:
     def _execute(self, rank, queue):
         self.rank = rank
 
-        self._process_setup()
+        # This line can be made less stupid by having the callback defined using class inheretence?
+        self.config.connection_callback(self)
         self.train_dataloader, self.val_dataloader = self._build_dataloaders()
 
         sim = TrainNode(self.config,

@@ -6,6 +6,7 @@ from gradient_strategy import *
 
 class SimConfig:
     num_nodes: int
+    connection_callback: Callable[[], None] = None
 
     model_class: Type[torch.nn.Module]
     model_kwargs: dict = {}
