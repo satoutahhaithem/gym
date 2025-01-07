@@ -15,12 +15,24 @@ class GradientStrategy:
         self.model = model
         self.config = config
 
+        self.nbytes = 0
+
     @abstractmethod
     def step(self):
-        pass
+        # print(f'{self.nbytes} bytes communicated')
+        self.nbytes = 0
 
     def zero_grad(self):
         self.optim.zero_grad()
+
+    def all_gather(self, tensor_list, tensor, group=None, async_op=False):
+        ## Custom logic to save tensor size etc.
+        nbytes = tensor.element_size() * tensor.nelement()
+        self.nbytes += nbytes
+
+        tensor_handle = dist.all_gather(tensor_list, tensor, group, async_op)
+
+        return tensor_handle
 
 class SimpleReduceGradient(GradientStrategy):
     def __init__(self, model, config):
@@ -53,7 +65,7 @@ class SimpleGatherGradient(GradientStrategy):
                 gathered_gradients = [torch.zeros_like(param.grad) for _ in range(world_size)]
 
                 # Use all_gather to collect gradients from all processes.
-                dist.all_gather(gathered_gradients, param.grad)
+                super().all_gather(gathered_gradients, param.grad)
 
                 # Manually average the gathered gradients.
                 avg_gradient = sum(gathered_gradients) / world_size
@@ -64,6 +76,8 @@ class SimpleGatherGradient(GradientStrategy):
         # Perform the optimization step.
         self.optim.step()
 
+        super().step()
+
 
 
 class DeMoGradient(GradientStrategy):
@@ -72,8 +86,12 @@ class DeMoGradient(GradientStrategy):
 
         print('initialising DeMo engine')
 
-        self.optim = DeMo(model.parameters(), **config.optimizer_kwargs)
+        self.optim = DeMo(model.parameters(), 
+                          **config.optimizer_kwargs, 
+                          custom_all_gather=super().all_gather)
 
     def step(self):
         # DeMo communicates gradients and then does optimizer step.
         self.optim.step()
+
+        super().step() # Print number of bytes communicated. This can be put in a different method tbh.

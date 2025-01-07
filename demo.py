@@ -25,6 +25,7 @@ class DeMo(torch.optim.SGD):
         compression_chunk: int = 64,
         weight_decay: float = 0.0,
         process_group: Optional[dist.ProcessGroup] = None,
+        custom_all_gather=None,
         **kwargs,
     ):
         super().__init__(
@@ -37,6 +38,11 @@ class DeMo(torch.optim.SGD):
             weight_decay=0.0,
             **kwargs,
         )
+
+        if not custom_all_gather:
+            self.all_gather = dist.all_gather
+        else:
+            self.all_gather = custom_all_gather
 
         self.compression_decay = compression_decay
         self.compression_chunk = compression_chunk
@@ -95,8 +101,8 @@ class DeMo(torch.optim.SGD):
         sparse_idx_list = [torch.zeros_like(sparse_idx) for wi in range(world_size)]
         sparse_val_list = [torch.zeros_like(sparse_val) for wi in range(world_size)]
 
-        sparse_idx_handle = dist.all_gather(sparse_idx_list, sparse_idx, group=self.process_group, async_op=True)
-        sparse_val_handle = dist.all_gather(sparse_val_list, sparse_val, group=self.process_group, async_op=True)
+        sparse_idx_handle = self.all_gather(sparse_idx_list, sparse_idx, group=self.process_group, async_op=True)
+        sparse_val_handle = self.all_gather(sparse_val_list, sparse_val, group=self.process_group, async_op=True)
 
         sparse_idx_handle.wait()
         sparse_val_handle.wait()
