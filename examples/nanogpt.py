@@ -523,14 +523,15 @@ def main():
     parser.add_argument("--beta2", type=float, default=0.95)
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints")
     parser.add_argument("--seed", type=int, default=1337)
+    parser.add_argument("--test_size", action='store_true')
     args = parser.parse_args()
 
     # Set random seed
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
     np.random.seed(args.seed)
-    torch.backends.cuda.matmul.allow_tf32 = True
-    torch.backends.cudnn.allow_tf32 = True
+    # torch.backends.cuda.matmul.allow_tf32 = True
+    # torch.backends.cudnn.allow_tf32 = True
 
     # Load dataset from HuggingFace
     train_data, val_data, args.vocab_size = get_dataset(args)
@@ -540,39 +541,44 @@ def main():
     train_dataset = GPTTrainDataset(train_data, args.block_size)
     val_dataset = GPTTrainDataset(val_data, args.block_size)
 
-    config = setup_config(args)
+    if args.test_size:
+        gpt_config = GPTConfig(
+            block_size=args.block_size,
+            vocab_size=args.vocab_size,
+            n_layer=1,
+            n_head=1,
+            n_embd=32,
+        )
+    else:
+        gpt_config = GPTConfig(
+            block_size=args.block_size,
+            vocab_size=args.vocab_size,
+            n_layer=12,
+            n_head=12,
+            n_embd=768,
+        )
 
-    config.train_dataset = train_dataset
-    config.val_dataset = val_dataset
 
-    # # Create diloco config
-    # diloco_config = DilocoSimulatorConfig(
-    #     model_cls=DilocoGPTWrapper,
-    #     model_kwargs={"config": gpt_config},
-    #     optimizer_kwargs={
-    #         "weight_decay": args.weight_decay,
-    #         "lr": args.learning_rate,
-    #         "betas": (args.beta1, args.beta2),
-    #     },
-    #     loss_fn=identity_loss,
-    #     train_dataset=train_dataset,
-    #     eval_dataset=val_dataset,
-    #     batch_size=args.batch_size,
-    #     num_epochs=args.epochs,
-    #     save_dir=args.checkpoint_dir,
-    #     eval_iters=200,
-    #     ckpt_interval=1000,
-    #     num_nodes=args.num_nodes,
-    #     diloco_interval=1000,
-    # )
+    config = SimConfig(
+        model_class=GPT,
+        gpt_config=gpt_config,
+        gradient_class=SimpleGatherGradient,
+        criterion_class=torch.nn.CrossEntropyLoss,
+        num_epochs=args.epochs,
+        num_nodes=args.num_nodes,
+        train_dataset=train_dataset,
+        val_dataset=val_dataset,
+        batch_size=args.batch_size,
+        optimizer_kwargs={
+            'lr': args.learning_rate,
+            'weight_decay': args.weight_decay,
+            # 'betas': (args.beta1, args.beta2),
+        },
+    )
 
     # Create checkpoint directory if it doesn't exist
     # os.makedirs(args.checkpoint_dir, exist_ok=True)
 
-    config.optimizer_kwargs = {
-        'lr': 0.01,
-        # 'compression_topk': 32,
-    }
     simbuilder = LocalSimBuilder(config)
 
     simbuilder.execute()

@@ -65,8 +65,8 @@ class TrainNode:
     def train_epoch(self):
         self.model.train()
 
-        if int(os.environ['VERBOSITY']) >= 3:
-            print(f'Process {self.rank} train')
+        # if int(os.environ['VERBOSITY']) >= 3:
+        #     print(f'Process {self.rank} train')
 
         loss_sum = torch.tensor(0, device=self.device)
 
@@ -76,9 +76,8 @@ class TrainNode:
             self.gradient_strategy.zero_grad()
 
             X, y = batch
-            yhat = self.model.forward(X)
+            yhat = self.model.forward(X).transpose(1, 2)
 
-            yhat = yhat.transpose(1, 2)
             loss = self.criterion(yhat, y)
             
             loss.backward()
@@ -89,7 +88,7 @@ class TrainNode:
             loss_sum = torch.add(loss_sum, loss)
             train_loss_list.append(loss.item())
 
-            if i % 100 == 0:
+            if i % 100 == 0 or True:
                 dist.barrier()
                 dist.all_reduce(loss, op=dist.ReduceOp.SUM)
                 loss /= dist.get_world_size()
@@ -143,12 +142,12 @@ class TrainNode:
         for epoch in range(epochs):
             self.train_dataloader.sampler.set_epoch(epoch)
 
-            val_loss, val_accuracy = self.val_epoch()
+            # val_loss, val_accuracy = self.val_epoch()
 
-            if self.rank == 0:
-                print(val_loss / (len(self.val_dataloader) * self.config.batch_size), val_accuracy)
+            # if self.rank == 0:
+            #     print(val_loss / (len(self.val_dataloader) * self.config.batch_size), val_accuracy)
             
-            val_losses.append((val_loss, val_accuracy))
+            # val_losses.append((val_loss, val_accuracy))
 
             train_loss_list = self.train_epoch()
             train_losses += train_loss_list
