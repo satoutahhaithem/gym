@@ -39,7 +39,7 @@ class SimBuilder:
 
         
         # Capture losses during training
-        val_losses, train_losses = sim.train(epochs=self.config.num_epochs)
+        val_losses, train_losses = sim.train()
 
         # Send metrics to the main process
         queue.put({'rank': self.rank, 'val_losses': val_losses, 'train_losses': train_losses})

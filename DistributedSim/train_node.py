@@ -25,10 +25,6 @@ class TrainNode:
 
         self.model = self.config.model_class(self.config.gpt_config).to(self.device)
         
-        # def print_grad(grad):
-        #     print(grad)
-        # self.model.encoder_layer.self_attn.in_proj_weight.register_hook(print_grad)
-
         ## Ensure all process models share the same params
         for _, param in self.model.named_parameters():
             dist.broadcast(param.data, src=0)
@@ -39,9 +35,11 @@ class TrainNode:
 
         self.build_dataloaders()
 
-        # for _, param in self.model.named_parameters():
-        #     print(f'Process {self.rank} params {param}')
-        #     break
+        self.local_step = 0
+        self.max_steps = (len(self.train_dataloader) + len(self.val_dataloader)) * self.config.num_epochs
+
+        self.train_data_iter = iter(self.train_dataloader)
+        self.val_data_iter = iter(self.val_dataloader)
 
     
     def build_dataloaders(self):
@@ -62,94 +60,163 @@ class TrainNode:
                           shuffle=True)
 
 
-    def train_epoch(self):
-        self.model.train()
+    # def train_epoch(self):
+    #     self.model.train()
 
-        # if int(os.environ['VERBOSITY']) >= 3:
-        #     print(f'Process {self.rank} train')
+    #     # if int(os.environ['VERBOSITY']) >= 3:
+    #     #     print(f'Process {self.rank} train')
 
-        loss_sum = torch.tensor(0, device=self.device)
+    #     loss_sum = torch.tensor(0, device=self.device)
 
-        train_loss_list = []
+    #     train_loss_list = []
 
-        for i, batch in enumerate(self.train_dataloader, 0):
-            self.gradient_strategy.zero_grad()
+    #     for i, batch in enumerate(self.train_dataloader, 0):
+    #         self.gradient_strategy.zero_grad()
 
-            X, y = batch
-            yhat = self.model.forward(X).transpose(1, 2)
+    #         X, y = batch
+    #         yhat = self.model.forward(X).transpose(1, 2)
 
-            loss = self.criterion(yhat, y)
+    #         loss = self.criterion(yhat, y)
             
-            loss.backward()
-            dist.barrier()
+    #         loss.backward()
+    #         dist.barrier()
 
-            self.gradient_strategy.step()
+    #         self.gradient_strategy.step()
 
-            loss_sum = torch.add(loss_sum, loss)
-            train_loss_list.append(loss.item())
+    #         loss_sum = torch.add(loss_sum, loss)
+    #         train_loss_list.append(loss.item())
 
-            if i % 100 == 0 or True:
-                dist.barrier()
-                dist.all_reduce(loss, op=dist.ReduceOp.SUM)
-                loss /= dist.get_world_size()
+    #         if i % 100 == 0 or True:
+    #             dist.barrier()
+    #             dist.all_reduce(loss, op=dist.ReduceOp.SUM)
+    #             loss /= dist.get_world_size()
 
-                if self.rank == 0:
-                    print(f'step {i}/{len(self.train_dataloader)}: ' + \
-                        f'loss {(loss.item() / self.config.batch_size):.6f}')
+    #             if self.rank == 0:
+    #                 print(f'step {i}/{len(self.train_dataloader)}: ' + \
+    #                     f'loss {(loss.item() / self.config.batch_size):.6f}')
 
-        # dist.barrier()
-        # dist.all_reduce(loss_sum, op=dist.ReduceOp.SUM)
+    #     # dist.barrier()
+    #     # dist.all_reduce(loss_sum, op=dist.ReduceOp.SUM)
 
-        return train_loss_list
+    #     return train_loss_list
 
-    def val_epoch(self):
+    # def val_epoch(self):
+    #     self.model.eval()
+
+    #     loss_sum = torch.tensor(0, device=self.device)
+    #     correct = torch.tensor(0, device=self.device)
+    #     total = torch.tensor(0, device=self.device)
+
+    #     with torch.no_grad():
+    #         for i, batch in enumerate(self.val_dataloader, 0):
+    #             X, y = batch
+    #             yhat = self.model.forward(X)
+
+    #             yhat = yhat.transpose(1, 2)
+
+    #             loss = self.criterion(yhat, y)
+    #             loss_sum = torch.add(loss_sum, loss)
+
+    #             # Calculate accuracy
+    #             _, predicted = torch.max(yhat, dim=1)  # Get the index of the max logit
+    #             correct += (predicted == y).sum()      # Count correct predictions
+    #             total += y.size(0)                     # Total samples
+
+    #     ## Sum losses and correct/total counts across nodes
+    #     dist.barrier()
+    #     dist.all_reduce(loss_sum, op=dist.ReduceOp.SUM)
+    #     dist.all_reduce(correct, op=dist.ReduceOp.SUM)
+    #     dist.all_reduce(total, op=dist.ReduceOp.SUM)
+
+    #     accuracy = 100.0 * correct.item() / total.item()
+
+    #     return loss_sum.item(), accuracy
+
+
+    # def train(self, epochs=10):
+    #     val_losses = []
+    #     train_losses = []
+
+    #     for epoch in range(epochs):
+    #         self.train_dataloader.sampler.set_epoch(epoch)
+
+    #         # val_loss, val_accuracy = self.val_epoch()
+
+    #         # if self.rank == 0:
+    #         #     print(val_loss / (len(self.val_dataloader) * self.config.batch_size), val_accuracy)
+            
+    #         # val_losses.append((val_loss, val_accuracy))
+
+    #         train_loss_list = self.train_epoch()
+    #         train_losses += train_loss_list
+
+    #     return val_losses, train_losses
+
+    def _save_checkpoint(self):
+        torch.save(self.model.state_dict(), os.path.join(self.config.save_dir, f"model_{self.epoch}.pt"))
+
+    def _get_batch(self, eval=False):
+        if not eval or self.val_data_iter is None:
+            try:
+                x, y = next(self.train_data_iter)
+            except StopIteration:
+                self.epoch += 1
+                self.train_data_iter = iter(self.train_dataloader)
+                x, y = next(self.train_data_iter)
+        else:
+            try:
+                x, y = next(self.val_data_iter)
+            except StopIteration:
+                self.val_data_iter = iter(self.val_dataloader)
+                x, y = next(self.val_data_iter)
+
+        x, y = x.to(self.device), y.to(self.device)
+
+        return x, y
+
+    def _train_step(self):
+        x, y = self._get_batch()
+        
+        self.gradient_strategy.zero_grad()
+
+        output = self.model(x).transpose(1, 2)
+        loss = self.criterion(output, y)
+        loss.backward()
+        self.gradient_strategy.step()
+
+        # if self.rank == 0:
+        #     self._log_train(TrainStats(loss=loss.item(), perplexity=torch.exp(loss).item()))
+
+        return loss.item()
+
+    def _evaluate(self):
         self.model.eval()
-
-        loss_sum = torch.tensor(0, device=self.device)
-        correct = torch.tensor(0, device=self.device)
-        total = torch.tensor(0, device=self.device)
-
+        
         with torch.no_grad():
-            for i, batch in enumerate(self.val_dataloader, 0):
-                X, y = batch
-                yhat = self.model.forward(X)
-
-                yhat = yhat.transpose(1, 2)
-
-                loss = self.criterion(yhat, y)
-                loss_sum = torch.add(loss_sum, loss)
-
-                # Calculate accuracy
-                _, predicted = torch.max(yhat, dim=1)  # Get the index of the max logit
-                correct += (predicted == y).sum()      # Count correct predictions
-                total += y.size(0)                     # Total samples
-
-        ## Sum losses and correct/total counts across nodes
-        dist.barrier()
-        dist.all_reduce(loss_sum, op=dist.ReduceOp.SUM)
-        dist.all_reduce(correct, op=dist.ReduceOp.SUM)
-        dist.all_reduce(total, op=dist.ReduceOp.SUM)
-
-        accuracy = 100.0 * correct.item() / total.item()
-
-        return loss_sum.item(), accuracy
-
-
-    def train(self, epochs=10):
-        val_losses = []
-        train_losses = []
-
-        for epoch in range(epochs):
-            self.train_dataloader.sampler.set_epoch(epoch)
-
-            # val_loss, val_accuracy = self.val_epoch()
-
-            # if self.rank == 0:
-            #     print(val_loss / (len(self.val_dataloader) * self.config.batch_size), val_accuracy)
+            x, y = self._get_batch(eval=True)
             
-            # val_losses.append((val_loss, val_accuracy))
+            output = self.model(x).transpose(1, 2)
+            loss = self.criterion(output, y)
+            
+            # Synchronize loss across processes
+            dist.barrier()
+            dist.all_reduce(loss, op=dist.ReduceOp.SUM)
+            loss = loss / dist.get_world_size()
+            
+            # if self.rank == 0:
+            #     self._log_val(ValStats(loss=loss.item()))
+            
+            if self.rank == 0:
+                print(loss.item())
 
-            train_loss_list = self.train_epoch()
-            train_losses += train_loss_list
+            return loss.item()
 
-        return val_losses, train_losses
+    def train(self):
+        while self.local_step < self.max_steps:
+            if self.local_step % self.config.eval_interval == 0:
+                self._evaluate()
+
+            loss = self._train_step()
+            print(self.local_step)
+
+            self.local_step += 1

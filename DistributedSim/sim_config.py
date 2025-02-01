@@ -18,6 +18,7 @@ class SimConfig:
                  criterion_class: Optional[Type[torch.nn.Module]] = None,
                  criterion_kwargs: dict = {},
                  gradient_class: Optional[Type[GradientStrategy]] = None,
+                 eval_interval: int = 10,
                  **kwargs):
         self.num_nodes = num_nodes
         self.connection_callback = connection_callback
@@ -31,6 +32,7 @@ class SimConfig:
         self.criterion_class = criterion_class
         self.criterion_kwargs = criterion_kwargs
         self.gradient_class = gradient_class
+        self.eval_interval = eval_interval
         
         # Allow additional kwargs to be set as attributes
         for key, value in kwargs.items():

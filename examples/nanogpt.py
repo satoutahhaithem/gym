@@ -466,47 +466,6 @@ def get_dataset(args):
     print(f"Train data size: {train_data.shape}, Val data size: {val_data.shape}")
     return train_data, val_data, tokenizer.vocab_size
 
-
-def setup_config(args, trim_dataset=None):
-    config = SimConfig()
-
-    config.model_class = GPT
-    # config.model_kwargs = {
-    #     'vocab_size':args.vocab_size,
-    #     # 'context_len':context_len,
-    #     'context_len': args.block_size,
-    #     'd_model':768,
-    #     'dim_ff':768,
-    # }
-
-    # Create model config
-    config.gpt_config = GPTConfig(
-        block_size=args.block_size,
-        vocab_size=args.vocab_size,
-        n_layer=12,  # Use smaller model for testing, adjust as needed
-        n_head=12,
-        n_embd=768,
-    )
-
-    # config.gradient_class = SimpleReduceGradient
-
-    # config.optimizer_class = torch.optim.Adam
-    # config.optimizer_kwargs = {
-    #         'lr': 0.01
-    # }
-
-    # config.gradient_class = DeMoGradient
-    config.gradient_class = SimpleGatherGradient
-
-    config.criterion_class = torch.nn.CrossEntropyLoss
-    # config.criterion_class = F.cross_entropy
-
-    config.num_epochs = args.epochs
-
-    config.num_nodes = args.num_nodes
-
-    return config
-
 def main():
     # Command line arguments
     parser = argparse.ArgumentParser()
@@ -545,9 +504,9 @@ def main():
         gpt_config = GPTConfig(
             block_size=args.block_size,
             vocab_size=args.vocab_size,
-            n_layer=1,
-            n_head=1,
-            n_embd=32,
+            n_layer=2,
+            n_head=2,
+            n_embd=128,
         )
     else:
         gpt_config = GPTConfig(
