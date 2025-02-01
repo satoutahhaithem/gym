@@ -9,7 +9,7 @@ import torchvision.transforms as transforms
 from sim_builder import *
 from sim_config import *
 from gradient_strategy import *
-from demo import *
+from simulator.demo import *
 
 class CNN(nn.Module):
     def __init__(self):

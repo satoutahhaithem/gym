@@ -14,10 +14,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from sim_builder import *
-from sim_config import *
-from gradient_strategy import *
-from demo import *
+from simulator.sim_builder import *
+from simulator.sim_config import *
+from simulator.gradient_strategy import *
+from simulator.demo import *
 
 ## Config
 
@@ -27,7 +27,7 @@ token_dict = {letter:i for letter,i in zip(string.ascii_lowercase, range(1,27))}
 token_dict[' '] = 0
 token_dict['.'] = 27
 
-sentences_file = 'sentences.txt'
+sentences_file = 'data/sentences.txt'
 
 allowed_chars = set(string.ascii_lowercase + ' \n')
 

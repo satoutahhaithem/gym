@@ -14,10 +14,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from sim_builder import *
-from sim_config import *
-from gradient_strategy import *
-from demo import *
+from simulator.sim_builder import *
+from simulator.sim_config import *
+from simulator.gradient_strategy import *
+from simulator.demo import *
 
 from nanogpt import *
 
