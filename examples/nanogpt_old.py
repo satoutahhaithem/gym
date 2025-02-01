@@ -188,7 +188,8 @@ def setup_config(trim_dataset=None):
     config.gradient_class = DeMoGradient
     # config.gradient_class = SimpleGatherGradient
 
-    config.criterion_class = torch.nn.CrossEntropyLoss
+    # config.criterion_class = torch.nn.CrossEntropyLoss
+    config.criterion_class = F.cross_entropy
 
 
     config.num_epochs = epochs

@@ -2,6 +2,7 @@ import torch
 import torch.distributed as dist
 from torch.distributed import init_process_group, destroy_process_group
 from torch.utils.data import DataLoader, DistributedSampler
+import torch.nn.functional as F
 
 from typing import Optional, Callable, Type
 import os
@@ -22,7 +23,7 @@ class TrainNode:
         self.device = device
         self.rank = rank
 
-        self.model = self.config.model_class(**self.config.model_kwargs).to(self.device)
+        self.model = self.config.model_class(self.config.gpt_config).to(self.device)
         
         # def print_grad(grad):
         #     print(grad)
@@ -77,6 +78,7 @@ class TrainNode:
             X, y = batch
             yhat = self.model.forward(X)
 
+            yhat = yhat.transpose(1, 2)
             loss = self.criterion(yhat, y)
             
             loss.backward()
@@ -112,6 +114,8 @@ class TrainNode:
             for i, batch in enumerate(self.val_dataloader, 0):
                 X, y = batch
                 yhat = self.model.forward(X)
+
+                yhat = yhat.transpose(1, 2)
 
                 loss = self.criterion(yhat, y)
                 loss_sum = torch.add(loss_sum, loss)
