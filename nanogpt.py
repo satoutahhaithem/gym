@@ -85,7 +85,8 @@ class TransformerModel(nn.Module):
                 d_model=d_model,
                 nhead=n_heads,
                 dim_feedforward=dim_ff,
-                dropout=dropout
+                dropout=dropout,
+                batch_first=True,
             ),
             num_layers=num_layers
         )
