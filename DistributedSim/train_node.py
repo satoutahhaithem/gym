@@ -40,6 +40,9 @@ class TrainNode:
 
         self.local_step = 0
         self.max_steps = len(self.train_dataloader) * self.config.num_epochs
+        if self.config.gradient_config.max_local_steps:
+            self.max_steps = min(self.max_steps, 
+                                 self.config.gradient_config.max_local_steps)
 
         # if self.rank == 0:
         self.logger = WandbLogger(rank=self.rank, 
@@ -72,8 +75,7 @@ class TrainNode:
                           sampler=sampler)
 
         self.val_dataloader = DataLoader(self.config.val_dataset, 
-                        #   batch_size=self.config.batch_size,
-                          batch_size=256,
+                          batch_size=self.config.batch_size,
                           shuffle=True)
 
     def _save_checkpoint(self):
@@ -130,29 +132,33 @@ class TrainNode:
 
         if self.rank == 0:
             # For rank 0, we will calculate the local loss
-            self.model.eval()
-
-            with torch.no_grad():
-                x, y = self._get_batch(eval=True)
-                
-                output = self.model(x).transpose(1, 2)
-                loss = self.criterion(output, y)
-
-                self.logger.log_pure(loss=loss.item(), name="val_local")
+            this_model = self.model
+            model_name = 'val_local'
 
         if self.rank == 1:
             # For rank 1, we want to calculate the average model loss
-            model_clone.eval()
+            this_model = model_clone
+            model_name = 'val_global'
 
-            with torch.no_grad():   
-                x, y = self._get_batch(eval=True)
-                
-                output = model_clone(x).transpose(1, 2)
-                loss = self.criterion(output, y)
+        
+        this_model.eval()
 
-                self.logger.log_pure(loss=loss.item(), name="val_global")
+        if self.rank == 0 or self.rank == 1:
+            loss_total = 0
 
-            del model_clone
+            with torch.no_grad():
+                for _ in range(int(self.config.val_size / self.config.batch_size)):
+                    x, y = self._get_batch(eval=True)
+                    
+                    # print(x.shape, y.shape)
+                    output = this_model(x).transpose(1, 2)
+                    loss = self.criterion(output, y)
+
+                    loss_total += loss.item()
+
+            self.logger.log_pure(loss=loss_total, name=model_name)
+
+        del model_clone
 
     def train(self):
         while self.local_step < self.max_steps:

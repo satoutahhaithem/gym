@@ -20,7 +20,7 @@ def main():
     parser.add_argument(
         "--dataset", type=str, default="shakespeare", help="which dataset to use (shakespeare, wikitext, code)"
     )
-    parser.add_argument("--num_nodes", type=int, default=1)
+    parser.add_argument("--num_nodes", type=int, default=2)
     parser.add_argument("--block_size", type=int, default=1024)
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--epochs", type=int, default=1)
@@ -79,8 +79,7 @@ def main():
         batch_size=args.batch_size,
         val_size=256,
         # val_size=64,
-        gradient_class=SimpleReduceGradient,
-        # gradient_class=SPARTAGradient,
+        gradient_class=SPARTAGradient,
         gradient_config=GradientConfig(
             optimizer_class=torch.optim.SGD,
             optimizer_kwargs={
