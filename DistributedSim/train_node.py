@@ -43,7 +43,8 @@ class TrainNode:
         if self.rank == 0:
             self.logger = WandbLogger(config=self.config, model=self.model, max_steps=self.max_steps, project=self.config.wandb_project)
 
-        self.gradient_strategy = self.config.gradient_class(self.model, 
+        self.gradient_strategy = self.config.gradient_class(self.rank, 
+                                                            self.model, 
                                                             self.config,
                                                             self.logger if self.rank == 0 else None)
 

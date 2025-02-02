@@ -83,6 +83,11 @@ def main():
                 'weight_decay': args.weight_decay,
                 # 'betas': (args.beta1, args.beta2),
             },
+            # lr_scheduler=torch.optim.lr_scheduler.StepLR,
+            # lr_scheduler_kwargs={
+            #     'step_size': 10,
+            #     'gamma': 0.95
+            # }
         ),
         wandb_project="nanogpt_ddp",
         device='mps'

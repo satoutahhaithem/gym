@@ -9,12 +9,19 @@ from abc import ABC, abstractmethod
 from .demo import *
 
 class GradientConfig:
-    def __init__(self, optimizer_class: Type[torch.optim.Optimizer]=None, optimizer_kwargs: dict=None):
+    def __init__(self, 
+                 optimizer_class: Type[torch.optim.Optimizer] = None, 
+                 optimizer_kwargs: dict = None,
+                 lr_scheduler: Type[torch.optim.lr_scheduler._LRScheduler] = None,
+                 lr_scheduler_kwargs: dict = None):
         self.optimizer_class = optimizer_class
         self.optimizer_kwargs = optimizer_kwargs
+        self.lr_scheduler = lr_scheduler
+        self.lr_scheduler_kwargs = lr_scheduler_kwargs
 
 class GradientStrategy:
-    def __init__(self, model, config, logger=None):
+    def __init__(self, rank, model, config, logger=None):
+        self.rank = rank
         self.model = model
         self.config = config
         self.gradient_config = config.gradient_config
@@ -23,16 +30,23 @@ class GradientStrategy:
             self.logger = logger
 
         self.nbytes = 0
+        # Initialize scheduler as None; will be set after self.optim is defined in subclasses.
+        self.scheduler = None
 
     @abstractmethod
     def step(self):
         self.nbytes = 0
 
+        if self.scheduler is not None:
+            self.scheduler.step()
+            if self.rank == 0:
+                self.logger.log_lr(self.scheduler.get_last_lr()[0])
+
     def zero_grad(self):
         self.optim.zero_grad()
 
     def all_gather(self, tensor_list, tensor, group=None, async_op=False):
-        ## Custom logic to save tensor size etc.
+        # Custom logic to save tensor size etc.
         nbytes = tensor.element_size() * tensor.nelement()
         self.nbytes += nbytes
 
@@ -44,30 +58,39 @@ class GradientStrategy:
 
         return tensor_handle
 
+    def _setup_scheduler(self):
+        if self.gradient_config.lr_scheduler is not None:
+            lr_sched_kwargs = (self.gradient_config.lr_scheduler_kwargs 
+                               if self.gradient_config.lr_scheduler_kwargs is not None else {})
+            self.scheduler = self.gradient_config.lr_scheduler(self.optim, **lr_sched_kwargs)
+        else:
+            self.scheduler = None
+
+
 class SimpleReduceGradient(GradientStrategy):
-    def __init__(self, model, config, logger=None):
-        super().__init__(model, config, logger)
-
-
+    def __init__(self, rank, model, config, logger=None):
+        super().__init__(rank, model, config, logger)
         self.optim = self.gradient_config.optimizer_class(model.parameters(), 
                                                           **self.gradient_config.optimizer_kwargs)
+        self._setup_scheduler()
 
     def step(self):
-        # Default all_reduce, but doing it manually. 
+        # Default all_reduce, but doing it manually.
         for name, param in self.model.named_parameters():
-            ##  print(name, param, param.grad)
-            dist.all_reduce(param.grad, op=dist.ReduceOp.SUM)
-            param.grad /= dist.get_world_size()
+            if param.grad is not None:
+                dist.all_reduce(param.grad, op=dist.ReduceOp.SUM)
+                param.grad /= dist.get_world_size()
 
         self.optim.step()
+        if self.scheduler is not None:
+            self.scheduler.step()
 
-## If we want to replace dist.all_reduce with dist.all_gather for consistency with DeMo.
 class SimpleGatherGradient(GradientStrategy):
-    def __init__(self, model, config, logger=None):
-        super().__init__(model, config, logger)
-
+    def __init__(self, rank, model, config, logger=None):
+        super().__init__(rank, model, config, logger)
         self.optim = self.gradient_config.optimizer_class(model.parameters(), 
                                                           **self.gradient_config.optimizer_kwargs)
+        self._setup_scheduler()
 
     def step(self):
         for name, param in self.model.named_parameters():
@@ -89,20 +112,19 @@ class SimpleGatherGradient(GradientStrategy):
 
         super().step()
 
-
-
 class DeMoGradient(GradientStrategy):
-    def __init__(self, model, config, logger=None):
-        super().__init__(model, config, logger)
-
+    def __init__(self, rank, model, config, logger=None):
+        super().__init__(rank, model, config, logger)
         print('initialising DeMo engine')
-
         self.optim = DeMo(model.parameters(), 
                           **self.gradient_config.optimizer_kwargs, 
                           custom_all_gather=super().all_gather)
+        self._setup_scheduler()
 
     def step(self):
         # DeMo communicates gradients and then does optimizer step.
         self.optim.step()
+        if self.scheduler is not None:
+            self.scheduler.step()
 
-        super().step() # Print number of bytes communicated. This can be put in a different method tbh.
+        super().step()  # Print number of bytes communicated. This can be put in a different method tbh.

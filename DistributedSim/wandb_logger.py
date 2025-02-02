@@ -52,6 +52,8 @@ class WandbLogger:
             config=wandb_config
         )
 
+        self.current_lr = self.config.gradient_config.optimizer_kwargs['lr'] if self.config.gradient_config.optimizer_kwargs is not None else None
+
     def log_train(self, loss: float):
         wandb.log({
             "train_loss": loss,
@@ -62,6 +64,7 @@ class WandbLogger:
         self.pbar.set_postfix(
             {
                 "train_loss": f"{loss:.4f}",
+                "lr": f"{self.current_lr:.4f}",
             }
         )
 
@@ -72,7 +75,14 @@ class WandbLogger:
             "val_loss": loss,
             "val_perplexity": np.exp(loss)
         }, step=self.step)
-    
+
+    def log_lr(self, lr: float):
+        wandb.log({
+            "lr": lr
+        }, step=self.step)
+
+        self.current_lr = lr
+
     def log_dict(self, dict: dict):
         '''
         Log a dictionary of metrics - for use from GradientStrategy.
