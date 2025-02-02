@@ -67,20 +67,23 @@ def main():
     config = SimConfig(
         model_class=GPT,
         gpt_config=gpt_config,
-        gradient_class=SimpleGatherGradient,
         criterion_class=torch.nn.CrossEntropyLoss,
         num_epochs=args.epochs,
         num_nodes=args.num_nodes,
         train_dataset=train_dataset,
         val_dataset=val_dataset,
         batch_size=args.batch_size,
-        optimizer_kwargs={
-            'lr': args.learning_rate,
-            'weight_decay': args.weight_decay,
-            # 'betas': (args.beta1, args.beta2),
-        },
+        gradient_class=SimpleGatherGradient,
+        gradient_config=GradientConfig(
+            optimizer_class=torch.optim.SGD,
+            optimizer_kwargs={
+                'lr': args.learning_rate,
+                # 'weight_decay': args.weight_decay,
+                # 'betas': (args.beta1, args.beta2),
+            },
+        ),
         wandb_project="nanogpt_ddp",
-        device='cpu'
+        device='mps'
     )
 
     # Create checkpoint directory if it doesn't exist

@@ -8,11 +8,16 @@ from abc import ABC, abstractmethod
 
 from .demo import *
 
+class GradientConfig:
+    def __init__(self, optimizer_class: Type[torch.optim.Optimizer]=None, optimizer_kwargs: dict=None):
+        self.optimizer_class = optimizer_class
+        self.optimizer_kwargs = optimizer_kwargs
 
 class GradientStrategy:
     def __init__(self, model, config, logger=None):
         self.model = model
         self.config = config
+        self.gradient_config = config.gradient_config
 
         if logger is not None:
             self.logger = logger
@@ -43,7 +48,9 @@ class SimpleReduceGradient(GradientStrategy):
     def __init__(self, model, config, logger=None):
         super().__init__(model, config, logger)
 
-        self.optim = config.optimizer_class(model.parameters(), **config.optimizer_kwargs)
+
+        self.optim = self.gradient_config.optimizer_class(model.parameters(), 
+                                                          **self.gradient_config.optimizer_kwargs)
 
     def step(self):
         # Default all_reduce, but doing it manually. 
@@ -59,7 +66,8 @@ class SimpleGatherGradient(GradientStrategy):
     def __init__(self, model, config, logger=None):
         super().__init__(model, config, logger)
 
-        self.optim = config.optimizer_class(model.parameters(), **config.optimizer_kwargs)
+        self.optim = self.gradient_config.optimizer_class(model.parameters(), 
+                                                          **self.gradient_config.optimizer_kwargs)
 
     def step(self):
         for name, param in self.model.named_parameters():
@@ -90,7 +98,7 @@ class DeMoGradient(GradientStrategy):
         print('initialising DeMo engine')
 
         self.optim = DeMo(model.parameters(), 
-                          **config.optimizer_kwargs, 
+                          **self.gradient_config.optimizer_kwargs, 
                           custom_all_gather=super().all_gather)
 
     def step(self):
