@@ -2,6 +2,8 @@ import torch
 import torch.distributed as dist
 from torch.distributed import init_process_group, destroy_process_group
 
+from torch.optim.lr_scheduler import LambdaLR
+
 from typing import Optional, Callable, Type
 import os
 from abc import ABC, abstractmethod
@@ -13,11 +15,16 @@ class GradientConfig:
                  optimizer_class: Type[torch.optim.Optimizer] = None, 
                  optimizer_kwargs: dict = None,
                  lr_scheduler: Type[torch.optim.lr_scheduler._LRScheduler] = None,
-                 lr_scheduler_kwargs: dict = None):
+                 lr_scheduler_kwargs: dict = None,
+                 **kwargs):
         self.optimizer_class = optimizer_class
         self.optimizer_kwargs = optimizer_kwargs
         self.lr_scheduler = lr_scheduler
         self.lr_scheduler_kwargs = lr_scheduler_kwargs
+
+        # Allow additional kwargs to be set as attributes
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
 class GradientStrategy:
     def __init__(self, rank, model, config, logger=None):
@@ -33,7 +40,7 @@ class GradientStrategy:
         # Initialize scheduler as None; will be set after self.optim is defined in subclasses.
         self.scheduler = None
 
-    @abstractmethod
+    # @abstractmethod
     def step(self):
         self.nbytes = 0
 
@@ -59,7 +66,22 @@ class GradientStrategy:
         return tensor_handle
 
     def _setup_scheduler(self):
-        if self.gradient_config.lr_scheduler is not None:
+        def lr_lambda(current_step):
+            if current_step < self.gradient_config.warmup_steps:
+                return float(current_step) / float(max(self.gradient_config.warmup_steps, 1))
+            elif self.gradient_config.cosine_anneal:
+                min_lr_factor = 0.1
+                progress = (current_step - self.gradient_config.warmup_steps) / float(
+                    max(1, self.gradient_config.max_local_step - self.gradient_config.warmup_steps)
+                )
+                cosine_term = 0.5 * (1.0 + math.cos(math.pi * progress))
+                return (1 - min_lr_factor) * cosine_term + min_lr_factor
+            else:
+                return 1.0
+            
+        if self.gradient_config.lr_scheduler == 'lambda_cosine':
+            self.scheduler = LambdaLR(self.optim, lr_lambda)
+        elif self.gradient_config.lr_scheduler is not None:
             lr_sched_kwargs = (self.gradient_config.lr_scheduler_kwargs 
                                if self.gradient_config.lr_scheduler_kwargs is not None else {})
             self.scheduler = self.gradient_config.lr_scheduler(self.optim, **lr_sched_kwargs)
@@ -82,8 +104,8 @@ class SimpleReduceGradient(GradientStrategy):
                 param.grad /= dist.get_world_size()
 
         self.optim.step()
-        if self.scheduler is not None:
-            self.scheduler.step()
+
+        super().step()
 
 class SimpleGatherGradient(GradientStrategy):
     def __init__(self, rank, model, config, logger=None):
@@ -124,7 +146,5 @@ class DeMoGradient(GradientStrategy):
     def step(self):
         # DeMo communicates gradients and then does optimizer step.
         self.optim.step()
-        if self.scheduler is not None:
-            self.scheduler.step()
 
         super().step()  # Print number of bytes communicated. This can be put in a different method tbh.

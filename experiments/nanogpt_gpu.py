@@ -12,6 +12,7 @@ from DistributedSim.demo import *
 
 from DistributedSim.models.nanogpt import *
 
+
 def main():
     # Command line arguments
     parser = argparse.ArgumentParser()
@@ -31,7 +32,7 @@ def main():
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--test_size", action='store_true')
     parser.add_argument("--gpu_offset", type=int, default=0)
-    parser.add_argument("--eval_interval", type=int, default=100)
+    parser.add_argument("--eval_interval", type=int, default=1000)
     args = parser.parse_args()
 
     # Set random seed
@@ -76,14 +77,19 @@ def main():
         train_dataset=train_dataset,
         val_dataset=val_dataset,
         batch_size=args.batch_size,
-        gradient_class=SimpleGatherGradient,
+        gradient_class=SimpleReduceGradient,
         gradient_config=GradientConfig(
             optimizer_class=torch.optim.SGD,
             optimizer_kwargs={
-                'lr': args.learning_rate,
-                'weight_decay': args.weight_decay,
+                # 'lr': args.learning_rate,
+                # 'weight_decay': args.weight_decay,
                 # 'betas': (args.beta1, args.beta2),
             },
+            lr_scheduler='lambda_cosine',
+            # warmup_steps=3000,
+            warmup_steps=300,
+            cosine_anneal=True,
+            max_local_step=30000,
             # lr_scheduler=torch.optim.lr_scheduler.StepLR,
             # lr_scheduler_kwargs={
             #     'step_size': 10,

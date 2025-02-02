@@ -72,7 +72,8 @@ class TrainNode:
                           sampler=sampler)
 
         self.val_dataloader = DataLoader(self.config.val_dataset, 
-                          batch_size=self.config.batch_size,
+                        #   batch_size=self.config.batch_size,
+                          batch_size=256,
                           shuffle=True)
 
     def _save_checkpoint(self):

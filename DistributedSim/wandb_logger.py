@@ -93,7 +93,7 @@ class WandbLogger:
         self.wandb_run_id = wandb.run.name
 
         self.current_lr = self.config.gradient_config.optimizer_kwargs.get('lr', None) if \
-            self.config.gradient_config.optimizer_kwargs else None
+            self.config.gradient_config.optimizer_kwargs else 0.0
 
     def _broadcast_run_info(self, run_id: str, run_name: str):
         """Broadcast run ID and name from rank 0 to others."""
@@ -136,19 +136,19 @@ class WandbLogger:
             self.pbar.update(1)
             self.pbar.set_postfix(
                 {
-                "train_loss": f"{loss:.4f}",
-                    "lr": f"{self.current_lr:.4f}",
+                    "train_loss": f"{loss:.4f}",
+                    "lr": f"{self.current_lr:.6f}",
                 }
             )
+
+            wandb.log({
+                "lr":self.current_lr
+            }, step=self.step)
 
     def increment_step(self):
         self.step += 1
 
     def log_lr(self, lr: float):
-        wandb.log({
-            "lr": lr
-        }, step=self.step)
-
         if self.rank == 0:
             self.current_lr = lr
 
