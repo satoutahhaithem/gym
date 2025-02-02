@@ -19,8 +19,9 @@ def main():
     parser.add_argument(
         "--dataset", type=str, default="shakespeare", help="which dataset to use (shakespeare, wikitext, code)"
     )
+    parser.add_argument("--num_nodes", type=int, default=1)
     parser.add_argument("--block_size", type=int, default=1024)
-    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--learning_rate", type=float, default=6e-4)
     parser.add_argument("--weight_decay", type=float, default=1e-1)
@@ -30,7 +31,7 @@ def main():
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--test_size", action='store_true')
     parser.add_argument("--gpu_offset", type=int, default=0)
-    parser.add_argument("--num_nodes", type=int, default=1)
+    parser.add_argument("--eval_interval", type=int, default=100)
     args = parser.parse_args()
 
     # Set random seed
@@ -94,9 +95,10 @@ def main():
         wandb_project="nanogpt_ddp",
         device='cuda',
         gpu_offset=args.gpu_offset,
+        eval_interval=args.eval_interval,
     )
 
-    simbuilder = SingleSimBuilder(config)
+    simbuilder = LocalSimBuilder(config)
 
     simbuilder.execute()
 

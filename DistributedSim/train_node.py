@@ -120,7 +120,7 @@ class TrainNode:
         return loss.item()
 
     def _evaluate(self):
-        model_clone = self.config.model_class(self.config.gpt_config)
+        model_clone = self.config.model_class(self.config.gpt_config).to(self.device)
         model_clone.load_state_dict(copy.deepcopy(self.model.state_dict()))
 
         for name, param in model_clone.named_parameters():
@@ -143,15 +143,11 @@ class TrainNode:
             # For rank 1, we want to calculate the average model loss
             model_clone.eval()
 
-            print('calculating global loss')
-
             with torch.no_grad():   
                 x, y = self._get_batch(eval=True)
                 
                 output = model_clone(x).transpose(1, 2)
                 loss = self.criterion(output, y)
-
-                print(f'loss: {loss.item()}')
 
                 self.logger.log_pure(loss=loss.item(), name="val_global")
 

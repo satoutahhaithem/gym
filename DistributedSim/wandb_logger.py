@@ -127,7 +127,7 @@ class WandbLogger:
             f"{name}_loss": loss,
             f"{name}_perplexity": np.exp(loss)
         }, step=self.step)
-        print(f'logged {name} loss: {loss}')
+        # print(f'logged {name} loss: {loss}')
 
     def log_train(self, loss: float):
         self.log_pure(loss, "train")

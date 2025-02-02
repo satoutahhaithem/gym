@@ -58,11 +58,14 @@ class LocalSimBuilder(SimBuilder):
 
         # initialize the process group
         if self.config.device == 'cuda':
-            dist.init_process_group("nccl", rank=self.rank, world_size=self.config.num_nodes)
-            self.device = torch.device(f"cuda:{self.rank + self.config.gpu_offset}")
+            dist.init_process_group("gloo", rank=self.rank, world_size=self.config.num_nodes)
+            # dist.init_process_group("nccl", rank=self.rank, world_size=self.config.num_nodes)
+            self.device = torch.device(f"cuda:{(self.rank + self.config.gpu_offset) % torch.cuda.device_count()}")
         else:
             dist.init_process_group("gloo", rank=self.rank, world_size=self.config.num_nodes)
             self.device = torch.device("cpu")
+
+        print(self.device)
 
 class SingleSimBuilder(SimBuilder):
     def _build_connection(self):
