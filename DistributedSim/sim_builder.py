@@ -83,3 +83,7 @@ class LocalSimBuilder(SimBuilder):
         # TODO: doesn't have to be gloo & cpu
         dist.init_process_group("gloo", rank=self.rank, world_size=self.config.num_nodes)
         self.device = torch.device("cpu")
+
+class SingleSimBuilder(SimBuilder):
+    def _build_connection(self):
+        self.device = torch.device(self.config.device)

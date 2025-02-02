@@ -30,7 +30,11 @@ class GradientStrategy:
         nbytes = tensor.element_size() * tensor.nelement()
         self.nbytes += nbytes
 
-        tensor_handle = dist.all_gather(tensor_list, tensor, group, async_op)
+        if self.config.num_nodes > 1:
+            tensor_handle = dist.all_gather(tensor_list, tensor, group, async_op)
+        else:
+            tensor_list[0] = tensor
+            tensor_handle = tensor_list[0]
 
         return tensor_handle
 
@@ -57,18 +61,16 @@ class SimpleGatherGradient(GradientStrategy):
         self.optim = config.optimizer_class(model.parameters(), **config.optimizer_kwargs)
 
     def step(self):
-        world_size = dist.get_world_size()
-
         for name, param in self.model.named_parameters():
             if param.grad is not None:
                 # Initialize a list to hold the gathered gradients for this parameter.
-                gathered_gradients = [torch.zeros_like(param.grad) for _ in range(world_size)]
+                gathered_gradients = [torch.zeros_like(param.grad) for _ in range(self.config.num_nodes)]
 
                 # Use all_gather to collect gradients from all processes.
                 super().all_gather(gathered_gradients, param.grad)
 
                 # Manually average the gathered gradients.
-                avg_gradient = sum(gathered_gradients) / world_size
+                avg_gradient = sum(gathered_gradients) / self.config.num_nodes
 
                 # Update the gradient of the parameter to the averaged gradient.
                 param.grad.copy_(avg_gradient)

@@ -10,6 +10,49 @@ import os
 from .sim_config import *
 from .gradient_strategy import *
 
+from tqdm import tqdm
+
+import wandb
+
+class WandbLogger:
+    def __init__(self, config: SimConfig, max_steps: int, project: str):
+        self.config = config
+        self.project = project
+
+        self.pbar = tqdm(total=max_steps)
+
+        self.step = 0
+
+        wandb.init(
+            # set the wandb project where this run will be logged
+            project=self.config.wandb_project,
+
+            # track hyperparameters and run metadata
+            config={
+                "learning_rate": self.config.optimizer_kwargs['lr'],
+                "architecture": "GPT",
+                # "dataset": self.config.train_dataset,
+                "epochs": self.config.num_epochs,
+            }
+        )
+
+    def log_train(self, loss: float):
+        wandb.log({"train_loss": loss}, step=self.step)
+
+        self.pbar.update(1)
+        self.pbar.set_postfix(
+            {
+                "loss": f"{loss:.4f}",
+                # "lr": f"{lr:.4f}",
+            }
+        )
+
+        self.step += 1
+
+
+    def log_val(self, loss: float):
+        wandb.log({"val_loss": loss}, step=self.step)
+
 class TrainNode:
     '''
     Single node of distributed training process. Should be the same regardless of rank topology/architecture.
@@ -26,8 +69,9 @@ class TrainNode:
         self.model = self.config.model_class(self.config.gpt_config).to(self.device)
         
         ## Ensure all process models share the same params
-        for _, param in self.model.named_parameters():
-            dist.broadcast(param.data, src=0)
+        if self.config.num_nodes > 1:
+            for _, param in self.model.named_parameters():
+                dist.broadcast(param.data, src=0)
 
         self.criterion = self.config.criterion_class(**self.config.criterion_kwargs)
 
@@ -36,10 +80,14 @@ class TrainNode:
         self.build_dataloaders()
 
         self.local_step = 0
-        self.max_steps = (len(self.train_dataloader) + len(self.val_dataloader)) * self.config.num_epochs
+        self.max_steps = len(self.train_dataloader) * self.config.num_epochs
 
         self.train_data_iter = iter(self.train_dataloader)
         self.val_data_iter = iter(self.val_dataloader)
+        
+        if self.rank == 0:
+            self.logger = WandbLogger(config=self.config, max_steps=self.max_steps, project=self.config.wandb_project)
+            
 
     
     def build_dataloaders(self):
@@ -59,101 +107,8 @@ class TrainNode:
                           batch_size=self.config.batch_size,
                           shuffle=True)
 
-
-    # def train_epoch(self):
-    #     self.model.train()
-
-    #     # if int(os.environ['VERBOSITY']) >= 3:
-    #     #     print(f'Process {self.rank} train')
-
-    #     loss_sum = torch.tensor(0, device=self.device)
-
-    #     train_loss_list = []
-
-    #     for i, batch in enumerate(self.train_dataloader, 0):
-    #         self.gradient_strategy.zero_grad()
-
-    #         X, y = batch
-    #         yhat = self.model.forward(X).transpose(1, 2)
-
-    #         loss = self.criterion(yhat, y)
-            
-    #         loss.backward()
-    #         dist.barrier()
-
-    #         self.gradient_strategy.step()
-
-    #         loss_sum = torch.add(loss_sum, loss)
-    #         train_loss_list.append(loss.item())
-
-    #         if i % 100 == 0 or True:
-    #             dist.barrier()
-    #             dist.all_reduce(loss, op=dist.ReduceOp.SUM)
-    #             loss /= dist.get_world_size()
-
-    #             if self.rank == 0:
-    #                 print(f'step {i}/{len(self.train_dataloader)}: ' + \
-    #                     f'loss {(loss.item() / self.config.batch_size):.6f}')
-
-    #     # dist.barrier()
-    #     # dist.all_reduce(loss_sum, op=dist.ReduceOp.SUM)
-
-    #     return train_loss_list
-
-    # def val_epoch(self):
-    #     self.model.eval()
-
-    #     loss_sum = torch.tensor(0, device=self.device)
-    #     correct = torch.tensor(0, device=self.device)
-    #     total = torch.tensor(0, device=self.device)
-
-    #     with torch.no_grad():
-    #         for i, batch in enumerate(self.val_dataloader, 0):
-    #             X, y = batch
-    #             yhat = self.model.forward(X)
-
-    #             yhat = yhat.transpose(1, 2)
-
-    #             loss = self.criterion(yhat, y)
-    #             loss_sum = torch.add(loss_sum, loss)
-
-    #             # Calculate accuracy
-    #             _, predicted = torch.max(yhat, dim=1)  # Get the index of the max logit
-    #             correct += (predicted == y).sum()      # Count correct predictions
-    #             total += y.size(0)                     # Total samples
-
-    #     ## Sum losses and correct/total counts across nodes
-    #     dist.barrier()
-    #     dist.all_reduce(loss_sum, op=dist.ReduceOp.SUM)
-    #     dist.all_reduce(correct, op=dist.ReduceOp.SUM)
-    #     dist.all_reduce(total, op=dist.ReduceOp.SUM)
-
-    #     accuracy = 100.0 * correct.item() / total.item()
-
-    #     return loss_sum.item(), accuracy
-
-
-    # def train(self, epochs=10):
-    #     val_losses = []
-    #     train_losses = []
-
-    #     for epoch in range(epochs):
-    #         self.train_dataloader.sampler.set_epoch(epoch)
-
-    #         # val_loss, val_accuracy = self.val_epoch()
-
-    #         # if self.rank == 0:
-    #         #     print(val_loss / (len(self.val_dataloader) * self.config.batch_size), val_accuracy)
-            
-    #         # val_losses.append((val_loss, val_accuracy))
-
-    #         train_loss_list = self.train_epoch()
-    #         train_losses += train_loss_list
-
-    #     return val_losses, train_losses
-
-    def _save_checkpoint(self):
-        torch.save(self.model.state_dict(), os.path.join(self.config.save_dir, f"model_{self.epoch}.pt"))
+    # def _save_checkpoint(self):
+    #     torch.save(self.model.state_dict(), os.path.join(self.config.save_dir, f"model_{self.epoch}.pt"))
 
     def _get_batch(self, eval=False):
         if not eval or self.val_data_iter is None:
@@ -184,8 +139,8 @@ class TrainNode:
         loss.backward()
         self.gradient_strategy.step()
 
-        # if self.rank == 0:
-        #     self._log_train(TrainStats(loss=loss.item(), perplexity=torch.exp(loss).item()))
+        if self.rank == 0:
+            self.logger.log_train(loss=loss.item())
 
         return loss.item()
 
@@ -199,15 +154,16 @@ class TrainNode:
             loss = self.criterion(output, y)
             
             # Synchronize loss across processes
-            dist.barrier()
-            dist.all_reduce(loss, op=dist.ReduceOp.SUM)
-            loss = loss / dist.get_world_size()
-            
-            # if self.rank == 0:
-            #     self._log_val(ValStats(loss=loss.item()))
+            if self.config.num_nodes > 1:
+                dist.barrier()
+                dist.all_reduce(loss, op=dist.ReduceOp.SUM)
+                loss = loss / dist.get_world_size()
             
             if self.rank == 0:
-                print(loss.item())
+                self.logger.log_val(loss=loss.item())
+            
+            # if self.rank == 0:
+            #     print(loss.item())
 
             return loss.item()
 
@@ -217,6 +173,5 @@ class TrainNode:
                 self._evaluate()
 
             loss = self._train_step()
-            print(self.local_step)
 
             self.local_step += 1

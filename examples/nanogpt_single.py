@@ -473,7 +473,7 @@ def main():
         "--dataset", type=str, default="shakespeare", help="which dataset to use (shakespeare, wikitext, code)"
     )
     parser.add_argument("--num_nodes", type=int, default=2)
-    parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--block_size", type=int, default=1024)
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--learning_rate", type=float, default=6e-4)
@@ -534,14 +534,14 @@ def main():
             # 'betas': (args.beta1, args.beta2),
         },
         wandb_project="nanogpt_ddp",
-        device='cpu'
+        device='mps'
     )
 
     # Create checkpoint directory if it doesn't exist
     # os.makedirs(args.checkpoint_dir, exist_ok=True)
 
-    simbuilder = LocalSimBuilder(config)
-    # simbuilder = SingleSimBuilder(config)
+    # simbuilder = LocalSimBuilder(config)
+    simbuilder = SingleSimBuilder(config)
 
     simbuilder.execute()
 
