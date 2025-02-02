@@ -89,12 +89,11 @@ def main():
             #     'gamma': 0.95
             # }
         ),
+        save_dir=args.checkpoint_dir,
+        checkpoint_interval=100,
         wandb_project="nanogpt_ddp",
         device='mps'
     )
-
-    # Create checkpoint directory if it doesn't exist
-    # os.makedirs(args.checkpoint_dir, exist_ok=True)
 
     simbuilder = SingleSimBuilder(config)
 

@@ -69,8 +69,12 @@ class TrainNode:
                           batch_size=self.config.batch_size,
                           shuffle=True)
 
-    # def _save_checkpoint(self):
-    #     torch.save(self.model.state_dict(), os.path.join(self.config.save_dir, f"model_{self.epoch}.pt"))
+    def _save_checkpoint(self):
+        if not os.path.exists(os.path.join(self.config.save_dir, self.config.wandb_project, self.logger.wandb_run_id, str(self.rank))):
+            os.makedirs(os.path.join(self.config.save_dir, self.config.wandb_project, self.logger.wandb_run_id, str(self.rank)), exist_ok=True)
+
+        filename = f"{self.local_step}.pt"
+        torch.save(self.model.state_dict(), os.path.join(self.config.save_dir, self.config.wandb_project, self.logger.wandb_run_id, str(self.rank), filename))
 
     def _get_batch(self, eval=False):
         if not eval or self.val_data_iter is None:
@@ -103,6 +107,9 @@ class TrainNode:
 
         if self.rank == 0:
             self.logger.log_train(loss=loss.item())
+
+        if self.local_step % self.config.checkpoint_interval == 0:
+            self._save_checkpoint()
 
         return loss.item()
 

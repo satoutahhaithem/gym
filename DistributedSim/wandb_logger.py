@@ -52,6 +52,8 @@ class WandbLogger:
             config=wandb_config
         )
 
+        self.wandb_run_id = wandb.run.name
+
         self.current_lr = self.config.gradient_config.optimizer_kwargs['lr'] if self.config.gradient_config.optimizer_kwargs is not None else None
 
     def log_train(self, loss: float):
