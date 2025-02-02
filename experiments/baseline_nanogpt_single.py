@@ -88,7 +88,6 @@ def main():
     # Create checkpoint directory if it doesn't exist
     # os.makedirs(args.checkpoint_dir, exist_ok=True)
 
-    # simbuilder = LocalSimBuilder(config)
     simbuilder = SingleSimBuilder(config)
 
     simbuilder.execute()

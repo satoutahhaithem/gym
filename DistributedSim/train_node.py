@@ -9,49 +9,9 @@ import os
 
 from .sim_config import *
 from .gradient_strategy import *
+from .wandb_logger import *
 
 from tqdm import tqdm
-
-import wandb
-
-class WandbLogger:
-    def __init__(self, config: SimConfig, max_steps: int, project: str):
-        self.config = config
-        self.project = project
-
-        self.pbar = tqdm(total=max_steps)
-
-        self.step = 0
-
-        wandb.init(
-            # set the wandb project where this run will be logged
-            project=self.config.wandb_project,
-
-            # track hyperparameters and run metadata
-            config={
-                "learning_rate": self.config.optimizer_kwargs['lr'],
-                "architecture": "GPT",
-                # "dataset": self.config.train_dataset,
-                "epochs": self.config.num_epochs,
-            }
-        )
-
-    def log_train(self, loss: float):
-        wandb.log({"train_loss": loss}, step=self.step)
-
-        self.pbar.update(1)
-        self.pbar.set_postfix(
-            {
-                "loss": f"{loss:.4f}",
-                # "lr": f"{lr:.4f}",
-            }
-        )
-
-        self.step += 1
-
-
-    def log_val(self, loss: float):
-        wandb.log({"val_loss": loss}, step=self.step)
 
 class TrainNode:
     '''
@@ -86,7 +46,7 @@ class TrainNode:
         self.val_data_iter = iter(self.val_dataloader)
         
         if self.rank == 0:
-            self.logger = WandbLogger(config=self.config, max_steps=self.max_steps, project=self.config.wandb_project)
+            self.logger = WandbLogger(config=self.config, model=self.model, max_steps=self.max_steps, project=self.config.wandb_project)
             
 
     

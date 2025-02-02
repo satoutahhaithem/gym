@@ -171,7 +171,7 @@ class GPT(nn.Module):
         assert config.block_size is not None
         self.config = config
 
-        print(self.config)
+        # print(self.config)
 
         self.transformer = nn.ModuleDict(
             dict(
