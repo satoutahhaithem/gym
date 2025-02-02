@@ -6,6 +6,7 @@ import torch.nn.functional as F
 
 from typing import Optional, Callable, Type
 import os
+import copy
 
 from .sim_config import *
 from .gradient_strategy import *
@@ -40,8 +41,13 @@ class TrainNode:
         self.local_step = 0
         self.max_steps = len(self.train_dataloader) * self.config.num_epochs
 
-        if self.rank == 0:
-            self.logger = WandbLogger(config=self.config, model=self.model, max_steps=self.max_steps, project=self.config.wandb_project)
+        # if self.rank == 0:
+        self.logger = WandbLogger(rank=self.rank, 
+                                  device=self.device, 
+                                  config=self.config, 
+                                  model=self.model, 
+                                  max_steps=self.max_steps, 
+                                  project=self.config.wandb_project)
 
         self.gradient_strategy = self.config.gradient_class(self.rank, 
                                                             self.model, 
@@ -114,33 +120,49 @@ class TrainNode:
         return loss.item()
 
     def _evaluate(self):
-        self.model.eval()
-        
-        with torch.no_grad():
-            x, y = self._get_batch(eval=True)
-            
-            output = self.model(x).transpose(1, 2)
-            loss = self.criterion(output, y)
-            
-            # Synchronize loss across processes
-            if self.config.num_nodes > 1:
-                dist.barrier()
-                dist.all_reduce(loss, op=dist.ReduceOp.SUM)
-                loss = loss / dist.get_world_size()
-            
-            if self.rank == 0:
-                self.logger.log_val(loss=loss.item())
-            
-            # if self.rank == 0:
-            #     print(loss.item())
+        model_clone = self.config.model_class(self.config.gpt_config)
+        model_clone.load_state_dict(copy.deepcopy(self.model.state_dict()))
 
-            return loss.item()
+        for name, param in model_clone.named_parameters():
+            dist.all_reduce(param.data, op=dist.ReduceOp.SUM)
+            param.data = param.data / dist.get_world_size()
+
+        if self.rank == 0:
+            # For rank 0, we will calculate the local loss
+            self.model.eval()
+
+            with torch.no_grad():
+                x, y = self._get_batch(eval=True)
+                
+                output = self.model(x).transpose(1, 2)
+                loss = self.criterion(output, y)
+
+                self.logger.log_pure(loss=loss.item(), name="val_local")
+
+        if self.rank == 1:
+            # For rank 1, we want to calculate the average model loss
+            model_clone.eval()
+
+            print('calculating global loss')
+
+            with torch.no_grad():   
+                x, y = self._get_batch(eval=True)
+                
+                output = model_clone(x).transpose(1, 2)
+                loss = self.criterion(output, y)
+
+                print(f'loss: {loss.item()}')
+
+                self.logger.log_pure(loss=loss.item(), name="val_global")
+
+            del model_clone
 
     def train(self):
         while self.local_step < self.max_steps:
             if self.local_step % self.config.eval_interval == 0:
                 self._evaluate()
 
-            loss = self._train_step()
+            self._train_step()
 
             self.local_step += 1
+            self.logger.increment_step()

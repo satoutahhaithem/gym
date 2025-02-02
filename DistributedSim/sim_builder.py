@@ -80,9 +80,12 @@ class LocalSimBuilder(SimBuilder):
         os.environ['MASTER_PORT'] = '12355'
 
         # initialize the process group
-        # TODO: doesn't have to be gloo & cpu
-        dist.init_process_group("gloo", rank=self.rank, world_size=self.config.num_nodes)
-        self.device = torch.device("cpu")
+        if self.config.device == 'cuda':
+            dist.init_process_group("nccl", rank=self.rank, world_size=self.config.num_nodes)
+            self.device = torch.device(f"cuda:{self.rank + self.config.gpu_offset}")
+        else:
+            dist.init_process_group("gloo", rank=self.rank, world_size=self.config.num_nodes)
+            self.device = torch.device("cpu")
 
 class SingleSimBuilder(SimBuilder):
     def _build_connection(self):

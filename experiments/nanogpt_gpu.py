@@ -15,12 +15,12 @@ from DistributedSim.models.nanogpt import *
 def main():
     # Command line arguments
     parser = argparse.ArgumentParser()
+
     parser.add_argument(
         "--dataset", type=str, default="shakespeare", help="which dataset to use (shakespeare, wikitext, code)"
     )
-    parser.add_argument("--num_nodes", type=int, default=2)
-    parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--block_size", type=int, default=1024)
+    parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--learning_rate", type=float, default=6e-4)
     parser.add_argument("--weight_decay", type=float, default=1e-1)
@@ -29,13 +29,16 @@ def main():
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints")
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--test_size", action='store_true')
-    parser.add_argument("--eval_interval", type=int, default=10)
+    parser.add_argument("--gpu_offset", type=int, default=0)
+    parser.add_argument("--num_nodes", type=int, default=1)
     args = parser.parse_args()
 
     # Set random seed
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
     np.random.seed(args.seed)
+    # torch.backends.cuda.matmul.allow_tf32 = True
+    # torch.backends.cudnn.allow_tf32 = True
 
     # Load dataset from HuggingFace
     train_data, val_data, args.vocab_size = get_dataset(args)
@@ -49,9 +52,9 @@ def main():
         gpt_config = GPTConfig(
             block_size=args.block_size,
             vocab_size=args.vocab_size,
-            n_layer=2,
-            n_head=2,
-            n_embd=128,
+            n_layer=4,
+            n_head=4,
+            n_embd=256,
         )
     else:
         gpt_config = GPTConfig(
@@ -77,7 +80,7 @@ def main():
             optimizer_class=torch.optim.SGD,
             optimizer_kwargs={
                 'lr': args.learning_rate,
-                # 'weight_decay': args.weight_decay,
+                'weight_decay': args.weight_decay,
                 # 'betas': (args.beta1, args.beta2),
             },
             # lr_scheduler=torch.optim.lr_scheduler.StepLR,
@@ -87,17 +90,13 @@ def main():
             # }
         ),
         save_dir=args.checkpoint_dir,
+        checkpoint_interval=100,
         wandb_project="nanogpt_ddp",
-        checkpoint_interval=1,
-        eval_interval=args.eval_interval,
-        device='cpu',
+        device='cuda',
+        gpu_offset=args.gpu_offset,
     )
 
-    # Create checkpoint directory if it doesn't exist
-    os.makedirs(args.checkpoint_dir + '/' + config.wandb_project, exist_ok=True)
-
-    simbuilder = LocalSimBuilder(config)
-    # simbuilder = SingleSimBuilder(config)
+    simbuilder = SingleSimBuilder(config)
 
     simbuilder.execute()
 
