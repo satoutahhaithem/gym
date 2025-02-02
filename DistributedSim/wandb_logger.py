@@ -1,9 +1,31 @@
 import wandb
 from tqdm import tqdm
+import numpy as np
 
 from torch import nn
 
 from .sim_config import *
+
+# class EvalStats:
+#     def __init__(self, loss: float=None, lr: float=None, train: bool=True):
+#         self.loss = loss
+#         # self.lr = lr
+#         self.perplexity = np.exp(loss)
+
+#         self.train = train
+
+#     def wandb_dict(self):
+#         if self.train:
+#             return {
+#                 "train_loss": self.loss,
+#                 "train_perplexity": self.perplexity,
+#                 # "lr": self.lr
+#             }
+#         else:
+#             return {
+#                 "val_loss": self.loss,
+#                 "val_perplexity": self.perplexity,
+#             }
 
 class WandbLogger:
     def __init__(self, config: SimConfig, model: nn.Module, max_steps: int, project: str):
@@ -31,19 +53,28 @@ class WandbLogger:
         )
 
     def log_train(self, loss: float):
-        wandb.log({"train_loss": loss}, step=self.step)
+        wandb.log({
+            "train_loss": loss,
+            "train_perplexity": np.exp(loss)
+        }, step=self.step)
 
         self.pbar.update(1)
         self.pbar.set_postfix(
             {
-                "loss": f"{loss:.4f}",
-                # "lr": f"{lr:.4f}",
+                "train_loss": f"{loss:.4f}",
             }
         )
 
         self.step += 1
 
-
     def log_val(self, loss: float):
-        wandb.log({"val_loss": loss}, step=self.step)
-
+        wandb.log({
+            "val_loss": loss,
+            "val_perplexity": np.exp(loss)
+        }, step=self.step)
+    
+    def log_dict(self, dict: dict):
+        '''
+        Log a dictionary of metrics - for use from GradientStrategy.
+        '''
+        wandb.log(dict, step=self.step)

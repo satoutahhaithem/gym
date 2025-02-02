@@ -33,22 +33,23 @@ class TrainNode:
             for _, param in self.model.named_parameters():
                 dist.broadcast(param.data, src=0)
 
-        self.criterion = self.config.criterion_class(**self.config.criterion_kwargs)
-
-        self.gradient_strategy = self.config.gradient_class(self.model, self.config)
-
         self.build_dataloaders()
+
+        self.criterion = self.config.criterion_class(**self.config.criterion_kwargs)
 
         self.local_step = 0
         self.max_steps = len(self.train_dataloader) * self.config.num_epochs
 
+        if self.rank == 0:
+            self.logger = WandbLogger(config=self.config, model=self.model, max_steps=self.max_steps, project=self.config.wandb_project)
+
+        self.gradient_strategy = self.config.gradient_class(self.model, 
+                                                            self.config,
+                                                            self.logger if self.rank == 0 else None)
+
         self.train_data_iter = iter(self.train_dataloader)
         self.val_data_iter = iter(self.val_dataloader)
         
-        if self.rank == 0:
-            self.logger = WandbLogger(config=self.config, model=self.model, max_steps=self.max_steps, project=self.config.wandb_project)
-            
-
     
     def build_dataloaders(self):
         sampler = DistributedSampler(

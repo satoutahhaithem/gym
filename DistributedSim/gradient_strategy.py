@@ -10,16 +10,17 @@ from .demo import *
 
 
 class GradientStrategy:
-    def __init__(self, model, config):
-        # TODO: custom delay to communication speed
+    def __init__(self, model, config, logger=None):
         self.model = model
         self.config = config
+
+        if logger is not None:
+            self.logger = logger
 
         self.nbytes = 0
 
     @abstractmethod
     def step(self):
-        # print(f'{self.nbytes} bytes communicated')
         self.nbytes = 0
 
     def zero_grad(self):
@@ -39,8 +40,8 @@ class GradientStrategy:
         return tensor_handle
 
 class SimpleReduceGradient(GradientStrategy):
-    def __init__(self, model, config):
-        super().__init__(model, config)
+    def __init__(self, model, config, logger=None):
+        super().__init__(model, config, logger)
 
         self.optim = config.optimizer_class(model.parameters(), **config.optimizer_kwargs)
 
@@ -55,8 +56,8 @@ class SimpleReduceGradient(GradientStrategy):
 
 ## If we want to replace dist.all_reduce with dist.all_gather for consistency with DeMo.
 class SimpleGatherGradient(GradientStrategy):
-    def __init__(self, model, config):
-        super().__init__(model, config)
+    def __init__(self, model, config, logger=None):
+        super().__init__(model, config, logger)
 
         self.optim = config.optimizer_class(model.parameters(), **config.optimizer_kwargs)
 
@@ -83,8 +84,8 @@ class SimpleGatherGradient(GradientStrategy):
 
 
 class DeMoGradient(GradientStrategy):
-    def __init__(self, model, config):
-        super().__init__(model, config)
+    def __init__(self, model, config, logger=None):
+        super().__init__(model, config, logger)
 
         print('initialising DeMo engine')
 
