@@ -28,7 +28,7 @@ class SimBuilder:
     def _process_cleanup(self):
         dist.destroy_process_group()
 
-    def _execute(self, rank, queue):
+    def _execute(self, rank):
         self.rank = rank
 
         self._build_connection()
@@ -39,36 +39,13 @@ class SimBuilder:
 
         
         # Capture losses during training
-        val_losses, train_losses = sim.train()
-
-        # Send metrics to the main process
-        queue.put({'rank': self.rank, 'val_losses': val_losses, 'train_losses': train_losses})
+        sim.train()
 
         self._process_cleanup()
         
 
     def execute(self):
-        queue = Queue()
-
-        torch.multiprocessing.spawn(self._execute, args=(queue,), nprocs=self.config.num_nodes, join=True)
-
-        metrics = []
-        while not queue.empty():
-            metrics.append(queue.get())
-
-        train_loss_series = pd.DataFrame({
-            f'rank{x['rank']}trainloss':x['train_losses'] for x in metrics
-        }).mean(axis=1)
-
-        val_loss_series = pd.DataFrame({
-            f'rank{x['rank']}valloss':x['val_losses'][0] for x in metrics
-        }).mean(axis=1)
-
-        val_accuracy_series = pd.DataFrame({
-            f'rank{x['rank']}valacc':x['val_losses'][1] for x in metrics
-        }).mean(axis=1)
-
-        return train_loss_series, val_loss_series, val_accuracy_series
+        torch.multiprocessing.spawn(self._execute, args=(), nprocs=self.config.num_nodes, join=True)
 
 class LocalSimBuilder(SimBuilder):
     def _build_connection(self):
