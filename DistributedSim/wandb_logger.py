@@ -95,33 +95,6 @@ class WandbLogger:
         self.current_lr = self.config.gradient_config.optimizer_kwargs.get('lr', None) if \
             self.config.gradient_config.optimizer_kwargs else 0.0
 
-    def _broadcast_run_info(self, run_id: str, run_name: str):
-        """Broadcast run ID and name from rank 0 to others."""
-        max_length = 256
-        run_id_encoded = run_id.ljust(max_length).encode('utf-8')
-        run_name_encoded = run_name.ljust(max_length).encode('utf-8')
-        
-        run_id_tensor = torch.tensor(list(run_id_encoded), dtype=torch.uint8).to(self.device)
-        run_name_tensor = torch.tensor(list(run_name_encoded), dtype=torch.uint8).to(self.device)
-        
-        torch.distributed.broadcast(run_id_tensor, src=0)
-        torch.distributed.broadcast(run_name_tensor, src=0)
-
-    def _receive_run_info(self) -> tuple:
-        """Receive run ID and name from rank 0."""
-        max_length = 256
-        run_id_tensor = torch.zeros(max_length, dtype=torch.uint8).to(self.device)
-        run_name_tensor = torch.zeros(max_length, dtype=torch.uint8).to(self.device)
-        
-        torch.distributed.broadcast(run_id_tensor, src=0)
-        torch.distributed.broadcast(run_name_tensor, src=0)
-        
-        run_id = run_id_tensor.cpu().numpy().tobytes().decode('utf-8').strip('\x00')
-        run_name = run_name_tensor.cpu().numpy().tobytes().decode('utf-8').strip('\x00')
-        return run_id, run_name
-
-
-
     def log_pure(self, loss: float, name: str):
         wandb.log({
             f"{name}_loss": loss,
@@ -157,3 +130,28 @@ class WandbLogger:
         Log a dictionary of metrics - for use from GradientStrategy.
         '''
         wandb.log(dict, step=self.step)
+
+    def _broadcast_run_info(self, run_id: str, run_name: str):
+        """Broadcast run ID and name from rank 0 to others."""
+        max_length = 256
+        run_id_encoded = run_id.ljust(max_length).encode('utf-8')
+        run_name_encoded = run_name.ljust(max_length).encode('utf-8')
+        
+        run_id_tensor = torch.tensor(list(run_id_encoded), dtype=torch.uint8).to(self.device)
+        run_name_tensor = torch.tensor(list(run_name_encoded), dtype=torch.uint8).to(self.device)
+        
+        torch.distributed.broadcast(run_id_tensor, src=0)
+        torch.distributed.broadcast(run_name_tensor, src=0)
+
+    def _receive_run_info(self) -> tuple:
+        """Receive run ID and name from rank 0."""
+        max_length = 256
+        run_id_tensor = torch.zeros(max_length, dtype=torch.uint8).to(self.device)
+        run_name_tensor = torch.zeros(max_length, dtype=torch.uint8).to(self.device)
+        
+        torch.distributed.broadcast(run_id_tensor, src=0)
+        torch.distributed.broadcast(run_name_tensor, src=0)
+        
+        run_id = run_id_tensor.cpu().numpy().tobytes().decode('utf-8').strip('\x00')
+        run_name = run_name_tensor.cpu().numpy().tobytes().decode('utf-8').strip('\x00')
+        return run_id, run_name
