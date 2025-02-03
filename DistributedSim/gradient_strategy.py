@@ -8,6 +8,8 @@ from typing import Optional, Callable, Type
 import os
 from abc import ABC, abstractmethod
 
+import torch.nn.utils as nn_utils
+
 from .demo import *
 
 class GradientConfig:
@@ -105,6 +107,10 @@ class SimpleReduceGradient(GradientStrategy):
                 dist.all_reduce(param.grad, op=dist.ReduceOp.SUM)
                 param.grad /= dist.get_world_size()
 
+        if self.gradient_config.max_norm:
+            nn_utils.clip_grad_norm_(self.model.parameters(), max_norm=self.config.max_norm)
+
+
         self.optim.step()
 
         super().step()
@@ -118,11 +124,13 @@ class SPARTAGradient(GradientStrategy):
                                                           **self.gradient_config.optimizer_kwargs)
         self._setup_scheduler()
 
-        self.index_selector = PartitionedIndexSelector(self.gradient_config.p_sparta)
+        # self.index_selector = PartitionedIndexSelector(self.gradient_config.p_sparta)
         self.index_selector = RandomIndexSelector(self.gradient_config.p_sparta)
         # self.buffer = []
 
     def step(self):
+        self.optim.step()
+
         with torch.no_grad():
             for name, param in self.model.named_parameters():
                 if not param.requires_grad:
@@ -141,8 +149,10 @@ class SPARTAGradient(GradientStrategy):
                     # indices_popped, sparse_data_popped = self.buffer.pop(0)
                     # param.masked_scatter_(indices_popped, sparse_data_popped)
 
-
-        self.optim.step()
+        # for name, param in self.model.named_parameters():
+        #     if len(param.shape) == 2:
+        #         print(f'rank {self.rank}: {name} {param._grad[:5,:5]} \n')
+        #         break
 
         super().step()
 
