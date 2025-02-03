@@ -30,6 +30,8 @@ class SingleThreadSimBuilder:
                                   max_steps=self.max_steps, 
                                   project=self.config.wandb_project)
 
+        self.communication_handler = CommunicationHandler(self.config)
+
         self.train_nodes = []
 
     def _train_step(self):
@@ -48,7 +50,8 @@ class SingleThreadSimBuilder:
             self.train_nodes.append(TrainNode(self.config, 
                                               torch.device(self.config.device), 
                                               rank, 
-                                              self.logger))
+                                              self.logger,
+                                              self.communication_handler))
 
         while self.local_step < self.max_steps:
             # if self.local_step % self.config.eval_interval == 0:

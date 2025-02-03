@@ -23,12 +23,14 @@ class TrainNode:
                  device: torch.device,
                  rank: int,
                  logger: WandbLogger,
+                 communication_handler: CommunicationHandler,
                  state_dict: Optional[dict] = None):
         self.config = config
 
         self.logger = logger
         self.device = device
         self.rank = rank
+        self.communication_handler = communication_handler
 
         self.model = self.config.model_class(self.config.gpt_config).to(self.device)
         
@@ -42,6 +44,7 @@ class TrainNode:
         self.gradient_strategy = self.config.gradient_class(self.rank, 
                                                             self.model, 
                                                             self.config,
+                                                            self.communication_handler,
                                                             self.logger)
 
         self.train_data_iter = iter(self.train_dataloader)

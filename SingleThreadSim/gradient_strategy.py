@@ -28,23 +28,41 @@ class GradientConfig:
         for key, value in kwargs.items():
             setattr(self, key, value)
 
+class CommunicationHandler:
+    def __init__(self, config):
+        self.config = config
+
+        self.buffer = [{} for _ in range(self.config.num_nodes)]
+
+    def post_tensor(self, name, tensor, rank):
+        self.buffer[rank][name] = tensor
+
+    def all_reduce_tensor(self, name):
+        tensor_result = torch.zeros_like(self.buffer[0][name])
+        n = 0
+        
+        for rank in range(self.config.num_nodes):
+            if name in self.buffer[rank]:
+                tensor_result += self.buffer[rank][name]
+                n += 1
+
+        return tensor_result, n
+
 class GradientStrategy:
-    def __init__(self, rank, model, config, logger=None):
+    def __init__(self, rank, model, config, communication_handler, logger=None):
         self.rank = rank
         self.model = model
         self.config = config
         self.gradient_config = config.gradient_config
+        self.communication_handler = communication_handler
 
         if logger is not None:
             self.logger = logger
 
-        self.nbytes = 0
         # Initialize scheduler as None; will be set after self.optim is defined in subclasses.
         self.scheduler = None
 
     def step(self):
-        self.nbytes = 0
-
         if self.scheduler is not None:
             self.scheduler.step()
             if self.rank == 0:
@@ -78,8 +96,8 @@ class GradientStrategy:
 
 
 class NoCommunicationGradient(GradientStrategy):
-    def __init__(self, rank, model, config, logger=None):
-        super().__init__(rank, model, config, logger)
+    def __init__(self, rank, model, config, communication_handler, logger=None):
+        super().__init__(rank, model, config, communication_handler, logger)
         self.optim = self.gradient_config.optimizer_class(model.parameters(), 
                                                           **self.gradient_config.optimizer_kwargs)
         self._setup_scheduler()
@@ -88,6 +106,27 @@ class NoCommunicationGradient(GradientStrategy):
         # No communication.
 
         self.optim.step()
+
+        super().step()
+
+class AllReduceGradient(GradientStrategy):
+    def __init__(self, rank, model, config, communication_handler, logger=None):
+        super().__init__(rank, model, config, communication_handler, logger)
+        self.optim = self.gradient_config.optimizer_class(model.parameters(), 
+                                                          **self.gradient_config.optimizer_kwargs)
+        self._setup_scheduler()
+
+    def step(self):
+        self.optim.step()
+
+        for name, param in self.model.named_parameters():
+            if not param.requires_grad:
+                continue
+
+            self.communication_handler.post_tensor(name, param.data, self.rank)
+
+            param.data, n = self.communication_handler.all_reduce_tensor(name)
+            param.data = param.data / n
 
         super().step()
 
