@@ -28,6 +28,7 @@ class TrainNode:
                  state_dict: Optional[dict] = None):
         self.config = config
 
+        torch.manual_seed(self.config.seed)
         self.logger = logger
         self.device = device
         self.rank = rank
@@ -102,7 +103,6 @@ class TrainNode:
         output = self.model(x).transpose(1, 2)
         loss = self.criterion(output, y)
         loss.backward()
-        self.gradient_strategy.step()
 
         if self.rank == 0:
             self.logger.log_train(loss=loss.item(), rank=self.rank)

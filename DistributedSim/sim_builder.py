@@ -36,9 +36,7 @@ class SimBuilder:
         sim = TrainNode(self.config,
                   self.device,
                   self.rank)
-
         
-        # Capture losses during training
         sim.train()
 
         self._process_cleanup()

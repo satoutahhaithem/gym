@@ -41,6 +41,13 @@ class SingleThreadSimBuilder:
             if self.local_step % self.config.checkpoint_interval == 0:
                 self.train_nodes[rank].save_checkpoint(self.local_step)
 
+    def _gradient_step(self):
+        for rank in range(self.config.num_nodes):
+            self.train_nodes[rank].gradient_strategy.broadcast_step()
+
+        for rank in range(self.config.num_nodes):
+            self.train_nodes[rank].gradient_strategy.recv_step()
+
     def _evaluate_step(self):
         model_clone = self.config.model_class(self.config.gpt_config).to(self.config.device)
 
@@ -89,6 +96,8 @@ class SingleThreadSimBuilder:
                 self._evaluate_step()
 
             self._train_step()
+
+            self._gradient_step()
 
             self.local_step += 1
             self.logger.increment_step()

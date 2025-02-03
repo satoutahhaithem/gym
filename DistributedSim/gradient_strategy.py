@@ -74,16 +74,16 @@ class GradientStrategy:
     def _setup_scheduler(self):
         def lr_lambda(current_step):
             if current_step < self.gradient_config.warmup_steps:
-                return float(current_step) / float(max(self.gradient_config.warmup_steps, 1))
+                return self.config.lr_scale * float(current_step) / float(max(self.gradient_config.warmup_steps, 1))
             elif self.gradient_config.cosine_anneal:
                 min_lr_factor = 0.1
                 progress = (current_step - self.gradient_config.warmup_steps) / float(
                     max(1, self.gradient_config.max_local_steps - self.gradient_config.warmup_steps)
                 )
                 cosine_term = 0.5 * (1.0 + math.cos(math.pi * progress))
-                return (1 - min_lr_factor) * cosine_term + min_lr_factor
+                return self.config.lr_scale * (1 - min_lr_factor) * cosine_term + min_lr_factor
             else:
-                return 1.0
+                return self.config.lr_scale * 1.0
             
         if self.gradient_config.lr_scheduler == 'lambda_cosine':
             self.scheduler = LambdaLR(self.optim, lr_lambda)
@@ -103,15 +103,14 @@ class SimpleReduceGradient(GradientStrategy):
         self._setup_scheduler()
 
     def step(self):
-        # Default all_reduce, but doing it manually.
-        for name, param in self.model.named_parameters():
-            if param.grad is not None:
-                dist.all_reduce(param.grad, op=dist.ReduceOp.SUM)
-                param.grad /= dist.get_world_size()
+        if self.config.num_nodes > 1 or True:
+            for param in self.model.parameters():
+                if param.grad is not None:
+                    dist.all_reduce(param.grad)
+                    param.grad.div_(dist.get_world_size())
 
-        if self.gradient_config.max_norm:
-            nn_utils.clip_grad_norm_(self.model.parameters(), max_norm=self.config.max_norm)
-
+            # if self.gradient_config.max_norm:
+            #     nn_utils.clip_grad_norm_(self.model.parameters(), max_norm=self.gradient_config.max_norm)
 
         self.optim.step()
 

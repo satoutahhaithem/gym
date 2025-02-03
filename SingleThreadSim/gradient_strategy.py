@@ -10,6 +10,8 @@ from abc import ABC, abstractmethod
 
 from .demo import *
 
+import traceback
+
 class GradientConfig:
     def __init__(self, 
                  optimizer_class: Type[torch.optim.Optimizer] = None, 
@@ -44,6 +46,8 @@ class GradientStrategy:
 
     def step(self):
         if self.scheduler is not None:
+            # print(f'rank {self.rank} scheduler step {self.scheduler.get_last_lr()[0]}')
+            # traceback.print_stack()
             self.scheduler.step()
             if self.rank == 0:
                 self.logger.log_lr(self.scheduler.get_last_lr()[0])
@@ -95,18 +99,25 @@ class FakeAllReduceGradient(GradientStrategy):
                                                           **self.gradient_config.optimizer_kwargs)
         self._setup_scheduler()
 
-    def step(self):
+    def broadcast_step(self):
+        super().step()
+
         self.optim.step()
+
         for name, param in self.model.named_parameters():
             if not param.requires_grad:
                 continue
 
             self.communication_handler.post_tensor(name, param.data, self.rank)
 
+
+    def recv_step(self):
+        for name, param in self.model.named_parameters():
+            if not param.requires_grad:
+                continue
+
             reduced_data, n = self.communication_handler.all_reduce_tensor(name)
             param.data.copy_(reduced_data / n)
-
-        super().step()
 
 
 # class SPARTAGradient(GradientStrategy):

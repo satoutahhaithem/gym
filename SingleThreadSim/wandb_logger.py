@@ -66,9 +66,8 @@ class WandbLogger:
     def increment_step(self):
         self.step += 1
 
-    def log_lr(self, lr: float, rank: int):
-        if rank == 0:
-            self.current_lr = lr
+    def log_lr(self, lr: float):
+        self.current_lr = lr
 
     def log_dict(self, dict: dict):
         '''
