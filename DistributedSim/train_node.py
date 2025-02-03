@@ -28,12 +28,13 @@ class TrainNode:
         self.rank = rank
 
         torch.manual_seed(self.config.seed)
+        torch.cuda.manual_seed(self.config.seed)
         self.model = self.config.model_class(self.config.gpt_config).to(self.device)
         
-        # for name, param in self.model.named_parameters():
-        #     if len(param.shape) == 2:
-        #         print(f'rank {self.rank} {name} {param[:5,:5]}')
-        #         break
+        for name, param in self.model.named_parameters():
+            if len(param.shape) == 2:
+                print(f'rank {self.rank} {name} {param[:5,:5]}')
+                break
         
         ## Ensure all process models share the same params
         if self.config.num_nodes > 1:

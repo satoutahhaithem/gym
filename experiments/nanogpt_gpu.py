@@ -107,6 +107,7 @@ def main():
         device='cuda',
         gpu_offset=args.gpu_offset,
         eval_interval=args.eval_interval,
+        seed=args.seed,
     )
 
     simbuilder = LocalSimBuilder(config)
