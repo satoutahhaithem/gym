@@ -72,7 +72,7 @@ class GradientStrategy:
             elif self.gradient_config.cosine_anneal:
                 min_lr_factor = 0.1
                 progress = (current_step - self.gradient_config.warmup_steps) / float(
-                    max(1, self.gradient_config.max_local_step - self.gradient_config.warmup_steps)
+                    max(1, self.gradient_config.max_local_steps - self.gradient_config.warmup_steps)
                 )
                 cosine_term = 0.5 * (1.0 + math.cos(math.pi * progress))
                 return (1 - min_lr_factor) * cosine_term + min_lr_factor

@@ -156,7 +156,8 @@ class TrainNode:
 
                     loss_total += loss.item()
 
-            self.logger.log_pure(loss=loss_total, name=model_name)
+            self.logger.log_pure(loss=loss_total / int(self.config.val_size / self.config.batch_size), 
+                                 name=model_name)
 
         del model_clone
 
@@ -169,3 +170,5 @@ class TrainNode:
 
             self.local_step += 1
             self.logger.increment_step()
+
+        self._evaluate()
