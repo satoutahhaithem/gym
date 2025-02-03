@@ -21,22 +21,22 @@ def main():
     parser.add_argument(
         "--dataset", type=str, default="shakespeare", help="which dataset to use (shakespeare, wikitext, code)"
     )
-    parser.add_argument("--num_nodes", type=int, default=1)
+    parser.add_argument("--num_nodes", type=int, default=2)
     parser.add_argument("--block_size", type=int, default=1024)
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints")
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--eval_interval", type=int, default=100)
+    parser.add_argument("--device", type=str, default='cpu')
     args = parser.parse_args()
 
     # Set random seed
     torch.manual_seed(args.seed)
-    # torch.cuda.manual_seed(args.seed)
+    torch.cuda.manual_seed(args.seed)
     np.random.seed(args.seed)
 
     # Load dataset from HuggingFace
-    # train_data, val_data, args.vocab_size = get_dataset(args)
     train_data, val_data, args.vocab_size = get_dataset_small(args)
     print(f'Vocab size: {args.vocab_size}')
 
@@ -52,7 +52,6 @@ def main():
         n_embd=128,
     )
 
-
     config = SimConfig(
         model_class=GPT,
         gpt_config=gpt_config,
@@ -64,12 +63,12 @@ def main():
         batch_size=args.batch_size,
         # val_size=256,
         val_size=64,
-        gradient_class=SimpleReduceGradient,
-        # gradient_class=SPARTAGradient,
+        # gradient_class=SimpleReduceGradient,
+        gradient_class=SPARTAGradient,
         gradient_config=GradientConfig(
             optimizer_class=torch.optim.SGD,
             optimizer_kwargs={},
-            p_sparta=0.005,
+            p_sparta=1.0,
             async_sparta_delay=0,
             lr_scheduler='lambda_cosine',
             warmup_steps=1000,
@@ -78,8 +77,8 @@ def main():
         ),
         save_dir=args.checkpoint_dir,
         checkpoint_interval=100,
-        wandb_project="nanogpt_char_cpu",
-        device='mps',
+        wandb_project="nanogpt_char",
+        device=args.device,
         eval_interval=args.eval_interval,
         seed=args.seed,
         lr_scale=args.batch_size / 16,
