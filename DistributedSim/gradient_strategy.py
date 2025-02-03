@@ -150,8 +150,8 @@ class SPARTAGradient(GradientStrategy):
                     # param.masked_scatter_(indices_popped, sparse_data_popped)
 
         # for name, param in self.model.named_parameters():
-        #     if len(param.shape) == 2:
-        #         print(f'rank {self.rank}: {name} {param._grad[:5,:5]} \n')
+        #     if len(param.shape) == 2 and param.grad is not None:
+        #         print(f'rank {self.rank}: {name} {param.data[:5,:5]} \n')
         #         break
 
         super().step()
