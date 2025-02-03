@@ -80,7 +80,7 @@ def main():
         device=args.device,
         eval_interval=args.eval_interval,
         seed=args.seed,
-        lr_scale=args.batch_size / 16,
+        lr_scale=args.num_nodes * args.batch_size / 16,
     )
 
     simbuilder = LocalSimBuilder(config)

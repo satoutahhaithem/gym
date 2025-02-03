@@ -29,6 +29,7 @@ def main():
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--eval_interval", type=int, default=100)
     parser.add_argument("--device", type=str, default='cpu')
+    parser.add_argument("--p_sparta", type=float, default=0.005)
     args = parser.parse_args()
 
     # Set random seed
@@ -68,7 +69,7 @@ def main():
         gradient_config=GradientConfig(
             optimizer_class=torch.optim.SGD,
             optimizer_kwargs={},
-            p_sparta=1.0,
+            p_sparta=args.p_sparta,
             async_sparta_delay=0,
             lr_scheduler='lambda_cosine',
             warmup_steps=1000,
