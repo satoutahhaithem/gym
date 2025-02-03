@@ -16,11 +16,13 @@ class GradientConfig:
                  optimizer_kwargs: dict = None,
                  lr_scheduler: Type[torch.optim.lr_scheduler._LRScheduler] = None,
                  lr_scheduler_kwargs: dict = None,
+                 max_local_steps: int = None,
                  **kwargs):
         self.optimizer_class = optimizer_class
         self.optimizer_kwargs = optimizer_kwargs
         self.lr_scheduler = lr_scheduler
         self.lr_scheduler_kwargs = lr_scheduler_kwargs
+        self.max_local_steps = max_local_steps
 
         # Allow additional kwargs to be set as attributes
         for key, value in kwargs.items():

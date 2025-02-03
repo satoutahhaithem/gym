@@ -7,51 +7,6 @@ from torch import nn
 from .sim_config import *
 
 class WandbLogger:
-    # def __init__(self, rank: int, config: SimConfig, model: nn.Module, max_steps: int, project: str):
-    #     self.rank = rank
-
-    #     self.config = config
-    #     self.project = project
-
-    #     self.step = 0
-
-    #     if self.rank == 0:
-    #         self.pbar = tqdm(total=max_steps)
-
-
-    #         wandb_config = self.config.__dict__.copy()
-    #         wandb_config.update({
-    #             "architecture": "GPT",
-    #             "model_parameters": model.get_num_params() / 1e6,
-    #         })
-
-    #         del wandb_config['model_class']
-    #         del wandb_config['gpt_config']
-    #         del wandb_config['train_dataset']
-    #         del wandb_config['val_dataset']
-            
-    #         wandb.init(
-    #             project=self.config.wandb_project,
-    #             config=wandb_config
-    #         )
-
-    #         wandb_id = wandb.run.id
-
-    #         dist.broadcast(wandb_id, src=0)
-    #     else:
-    #         wandb_id = dist.recv(src=0)
-
-    #         wandb.init(
-    #             id=wandb_id,
-    #             project=self.config.wandb_project,
-    #             config=wandb_config
-    #         )
-
-    #     self.wandb_run_id = wandb.run.name
-
-    #     if self.rank == 0:
-    #         self.current_lr = self.config.gradient_config.optimizer_kwargs['lr'] if self.config.gradient_config.optimizer_kwargs is not None else None
-
     def __init__(self, rank: int, device: torch.device, config: SimConfig, model: nn.Module, max_steps: int, project: str):
         self.device = device
         self.config = config
@@ -76,6 +31,8 @@ class WandbLogger:
         keys_to_remove = ['model_class', 'gpt_config', 'train_dataset', 'val_dataset']
         for key in keys_to_remove:
             del wandb_config[key]
+
+        wandb_config['gradient_config'] = self.config.gradient_config.__dict__
 
         # Handle wandb initialization across ranks
         if self.rank == 0:

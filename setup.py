@@ -9,8 +9,8 @@ setup(
     version="0.1.0",
     description="Distributed Training Simulator",
     author="Matt Beton",
-    author_email="your.email@example.com",
-    url="https://github.com/MattyAB/DeMoSim",
+    author_email="matthew.beton@gmail.com",
+    url="https://github.com/MattyAB/DistributedSim",
     packages=find_packages(),  # Automatically find packages in the directory
     install_requires=requirements,  # Install dependencies from requirements.txt
     python_requires=">=3.8",  # Specify Python version compatibility
