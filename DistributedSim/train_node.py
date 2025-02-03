@@ -27,7 +27,13 @@ class TrainNode:
         self.device = device
         self.rank = rank
 
+        torch.manual_seed(self.config.seed)
         self.model = self.config.model_class(self.config.gpt_config).to(self.device)
+        
+        # for name, param in self.model.named_parameters():
+        #     if len(param.shape) == 2:
+        #         print(f'rank {self.rank} {name} {param[:5,:5]}')
+        #         break
         
         ## Ensure all process models share the same params
         if self.config.num_nodes > 1:
@@ -59,6 +65,8 @@ class TrainNode:
 
         self.train_data_iter = iter(self.train_dataloader)
         self.val_data_iter = iter(self.val_dataloader)
+
+        self.first = True
         
     
     def build_dataloaders(self):
@@ -66,7 +74,8 @@ class TrainNode:
             self.config.train_dataset, 
             num_replicas=self.config.num_nodes, 
             rank=self.rank, 
-            shuffle=True, 
+            shuffle=True,
+            # seed=self.config.seed,
             drop_last=True
         )
 
@@ -89,6 +98,9 @@ class TrainNode:
         if not eval or self.val_data_iter is None:
             try:
                 x, y = next(self.train_data_iter)
+                # if self.first:
+                #     print(f'x {x[:5,:5]}')
+                #     self.first = False
             except StopIteration:
                 self.epoch += 1
                 self.train_data_iter = iter(self.train_dataloader)
@@ -170,5 +182,8 @@ class TrainNode:
 
             self.local_step += 1
             self.logger.increment_step()
+
+            # if self.local_step == 5:
+            #     break
 
         self._evaluate()
