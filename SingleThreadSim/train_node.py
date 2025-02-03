@@ -11,6 +11,7 @@ import copy
 from .sim_config import *
 from .gradient_strategy import *
 from .wandb_logger import *
+from .communication_handler import *
 
 from tqdm import tqdm
 
@@ -108,42 +109,3 @@ class TrainNode:
 
         return loss.item()
 
-## TODO: probably better to put all of this in sim_builder
-    # def evaluate_step(self):
-    #     model_clone = self.config.model_class(self.config.gpt_config).to(self.device)
-    #     model_clone.load_state_dict(copy.deepcopy(self.model.state_dict()))
-
-    #     for name, param in model_clone.named_parameters():
-    #         dist.all_reduce(param.data, op=dist.ReduceOp.SUM)
-    #         param.data = param.data / dist.get_world_size()
-
-    #     if self.rank == 0:
-    #         # For rank 0, we will calculate the local loss
-    #         this_model = self.model
-    #         model_name = 'val_local'
-
-    #     if self.rank == 1:
-    #         # For rank 1, we want to calculate the average model loss
-    #         this_model = model_clone
-    #         model_name = 'val_global'
-
-        
-    #     this_model.eval()
-
-    #     if self.rank == 0 or self.rank == 1:
-    #         loss_total = 0
-
-    #         with torch.no_grad():
-    #             for _ in range(int(self.config.val_size / self.config.batch_size)):
-    #                 x, y = self._get_batch(eval=True)
-                    
-    #                 # print(x.shape, y.shape)
-    #                 output = this_model(x).transpose(1, 2)
-    #                 loss = self.criterion(output, y)
-
-    #                 loss_total += loss.item()
-
-    #         self.logger.log_pure(loss=loss_total / int(self.config.val_size / self.config.batch_size), 
-    #                              name=model_name)
-
-    #     del model_clone

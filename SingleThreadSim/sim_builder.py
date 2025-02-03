@@ -7,7 +7,7 @@ import pandas as pd
 
 from .sim_config import *
 from .train_node import *
-
+from .communication_handler import *
 
 class SingleThreadSimBuilder:
     '''
@@ -42,8 +42,38 @@ class SingleThreadSimBuilder:
                 self.train_nodes[rank].save_checkpoint(self.local_step)
 
     def _evaluate_step(self):
-        for rank in range(self.config.num_nodes):
-            self.train_nodes[rank].evaluate_step()
+        model_clone = self.config.model_class(self.config.gpt_config).to(self.config.device)
+
+        for name, param in model_clone.named_parameters():
+            reduced_data = torch.zeros_like(param.data)
+
+            for rank in range(self.config.num_nodes):
+                if name in self.train_nodes[rank].model.state_dict():
+                    reduced_data += self.train_nodes[rank].model.state_dict()[name]
+                else:
+                    raise ValueError(f'{name} not found in buffer')
+
+            param.data.copy_(reduced_data / self.config.num_nodes)
+
+        for model, model_name in zip([model_clone, self.train_nodes[0].model], 
+                               ['val_global', 'val_local']):
+            model.eval()
+
+            loss_total = 0
+
+            with torch.no_grad():
+                for _ in range(int(self.config.val_size / self.config.batch_size)):
+                    x, y = self.train_nodes[0]._get_batch(eval=True)
+                    
+                    output = model(x).transpose(1, 2)
+                    loss = self.train_nodes[0].criterion(output, y)
+
+                    loss_total += loss.item()
+
+                self.logger.log_pure(loss=loss_total / int(self.config.val_size / self.config.batch_size), 
+                                     name=model_name)
+
+        del model_clone
 
     def execute(self):
         for rank in range(self.config.num_nodes):
@@ -55,12 +85,12 @@ class SingleThreadSimBuilder:
                                               state_dict=None if rank == 0 else self.train_nodes[0].model.state_dict()))
 
         while self.local_step < self.max_steps:
-            # if self.local_step % self.config.eval_interval == 0:
-            #     self._evaluate_step()
+            if self.local_step % self.config.eval_interval == 0:
+                self._evaluate_step()
 
             self._train_step()
 
             self.local_step += 1
             self.logger.increment_step()
 
-        # self._evaluate_step()
+        self._evaluate_step()

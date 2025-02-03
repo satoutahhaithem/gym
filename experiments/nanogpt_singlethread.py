@@ -30,6 +30,7 @@ def main():
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--test_size", action='store_true')
     parser.add_argument("--eval_interval", type=int, default=100)
+    parser.add_argument("--val_size", type=int, default=256)
     args = parser.parse_args()
 
     # Set random seed
@@ -70,17 +71,13 @@ def main():
                 # 'weight_decay': args.weight_decay,
                 # 'betas': (args.beta1, args.beta2),
             },
-            # lr_scheduler=torch.optim.lr_scheduler.StepLR,
-            # lr_scheduler_kwargs={
-            #     'step_size': 10,
-            #     'gamma': 0.95
-            # }
-        ),
+       ),
         save_dir=args.checkpoint_dir,
         wandb_project="nangpt_singlethread",
         checkpoint_interval=100,
         eval_interval=args.eval_interval,
         device='mps',
+        val_size=args.val_size,
     )
 
     # Create checkpoint directory if it doesn't exist
