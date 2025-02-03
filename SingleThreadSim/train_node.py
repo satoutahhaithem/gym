@@ -34,7 +34,7 @@ class TrainNode:
 
         self.model = self.config.model_class(self.config.gpt_config).to(self.device)
         
-        if rank == 0 and state_dict is not None:
+        if state_dict is not None:
             self.model.load_state_dict(state_dict)
 
         self.build_dataloaders()

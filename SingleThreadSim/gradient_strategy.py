@@ -94,7 +94,6 @@ class GradientStrategy:
         else:
             self.scheduler = None
 
-
 class NoCommunicationGradient(GradientStrategy):
     def __init__(self, rank, model, config, communication_handler, logger=None):
         super().__init__(rank, model, config, communication_handler, logger)
@@ -109,7 +108,7 @@ class NoCommunicationGradient(GradientStrategy):
 
         super().step()
 
-class AllReduceGradient(GradientStrategy):
+class FakeAllReduceGradient(GradientStrategy):
     def __init__(self, rank, model, config, communication_handler, logger=None):
         super().__init__(rank, model, config, communication_handler, logger)
         self.optim = self.gradient_config.optimizer_class(model.parameters(), 
@@ -118,15 +117,14 @@ class AllReduceGradient(GradientStrategy):
 
     def step(self):
         self.optim.step()
-
         for name, param in self.model.named_parameters():
             if not param.requires_grad:
                 continue
 
             self.communication_handler.post_tensor(name, param.data, self.rank)
 
-            param.data, n = self.communication_handler.all_reduce_tensor(name)
-            param.data = param.data / n
+            reduced_data, n = self.communication_handler.all_reduce_tensor(name)
+            param.data.copy_(reduced_data / n)
 
         super().step()
 

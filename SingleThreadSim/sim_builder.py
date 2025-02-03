@@ -51,7 +51,8 @@ class SingleThreadSimBuilder:
                                               torch.device(self.config.device), 
                                               rank, 
                                               self.logger,
-                                              self.communication_handler))
+                                              self.communication_handler,
+                                              state_dict=None if rank == 0 else self.train_nodes[0].model.state_dict()))
 
         while self.local_step < self.max_steps:
             # if self.local_step % self.config.eval_interval == 0:

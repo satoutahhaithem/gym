@@ -61,7 +61,7 @@ def main():
         train_dataset=train_dataset,
         val_dataset=val_dataset,
         batch_size=args.batch_size,
-        gradient_class=AllReduceGradient,
+        gradient_class=FakeAllReduceGradient,
         # gradient_class=NoCommunicationGradient,
         gradient_config=GradientConfig(
             optimizer_class=torch.optim.SGD,
