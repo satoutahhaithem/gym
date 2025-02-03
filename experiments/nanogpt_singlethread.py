@@ -12,6 +12,8 @@ from SingleThreadSim.demo import *
 
 from DistributedSim.models.nanogpt import *
 
+from SingleThreadSim.dataset_small import *
+
 def main():
     # Command line arguments
     parser = argparse.ArgumentParser()
@@ -35,7 +37,7 @@ def main():
     np.random.seed(args.seed)
 
     # Load dataset from HuggingFace
-    train_data, val_data, args.vocab_size = get_dataset(args)
+    train_data, val_data, args.vocab_size = get_dataset_small(args)
     print(f'Vocab size: {args.vocab_size}')
 
     # Create datasets
@@ -59,7 +61,8 @@ def main():
         train_dataset=train_dataset,
         val_dataset=val_dataset,
         batch_size=args.batch_size,
-        gradient_class=NoCommunicationGradient,
+        gradient_class=AllReduceGradient,
+        # gradient_class=NoCommunicationGradient,
         gradient_config=GradientConfig(
             optimizer_class=torch.optim.SGD,
             optimizer_kwargs={
