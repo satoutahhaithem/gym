@@ -64,7 +64,7 @@ def main():
         batch_size=args.batch_size,
         gradient_class=FakeAllReduceGradient,
         gradient_config=GradientConfig(
-            optimizer_class=torch.optim.SGD,
+            optimizer_class=torch.optim.Adam,
             optimizer_kwargs={
                 'lr': 0.001,
             },
