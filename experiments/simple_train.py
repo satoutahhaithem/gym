@@ -23,6 +23,9 @@ class GPTTrainDataset(torch.utils.data.Dataset):
         return x, x
 
 def train_iteration(model, optimizer, scheduler, criterion, batch, device):
+    """
+    A single training iteration that computes the loss and token accuracy.
+    """
     x, y = batch  # x and y have shape [batch_size, block_size]
     x = x.to(device)
     y = y.to(device)
@@ -32,11 +35,19 @@ def train_iteration(model, optimizer, scheduler, criterion, batch, device):
     loss.backward()
     optimizer.step()
     scheduler.step()
-    return loss.item()
+
+    # Compute prediction accuracy:
+    predictions = torch.argmax(logits, dim=-1)  # shape: [batch_size, block_size]
+    acc = (predictions == y).float().mean().item()
+    return loss.item(), acc
 
 def eval_iteration(model, criterion, val_loader, device, val_size, batch_size):
+    """
+    Run evaluation for a fixed number of batches and compute the average loss and accuracy.
+    """
     model.eval()
     val_loss_total = 0.0
+    val_acc_total = 0.0
     val_steps = 0
     val_batches = int(val_size / batch_size)
     with torch.no_grad():
@@ -47,12 +58,19 @@ def eval_iteration(model, criterion, val_loader, device, val_size, batch_size):
             logits = model(x)
             loss = criterion(logits.view(-1, logits.size(-1)), y.view(-1))
             val_loss_total += loss.item()
+
+            predictions = torch.argmax(logits, dim=-1)
+            acc = (predictions == y).float().mean().item()
+            val_acc_total += acc
+
             val_steps += 1
             if val_steps >= val_batches:
                 break
 
     model.train()
-    return val_loss_total / val_steps if val_steps > 0 else float('inf')
+    avg_loss = val_loss_total / val_steps if val_steps > 0 else float('inf')
+    avg_acc = val_acc_total / val_steps if val_steps > 0 else 0.0
+    return avg_loss, avg_acc
 
 def main():
     # Parse command-line arguments
@@ -88,7 +106,7 @@ def main():
     train_dataset = GPTTrainDataset(train_data, args.block_size)
     val_dataset = GPTTrainDataset(val_data, args.block_size)
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, 
-                                             generator=torch.Generator().manual_seed(args.seed))
+                                               generator=torch.Generator().manual_seed(args.seed))
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
 
     # Initialize the model
@@ -120,6 +138,7 @@ def main():
     # Training loop with interleaved validation
     global_step = 0
     train_loss_total = 0.0
+    train_acc_total = 0.0  # Accumulate training accuracy
     
     pbar = tqdm(total=total_steps, desc="Training")
     train_iter = iter(train_loader)
@@ -131,23 +150,29 @@ def main():
             train_iter = iter(train_loader)
             batch = next(train_iter)
             
-        # Training step
-        loss = train_iteration(model, optimizer, scheduler, criterion, batch, args.device)
+        # Training step with accuracy computation
+        loss, train_acc = train_iteration(model, optimizer, scheduler, criterion, batch, args.device)
         global_step += 1
         train_loss_total += loss
+        train_acc_total += train_acc
 
         current_lr = scheduler.get_last_lr()[0] if hasattr(scheduler, "get_last_lr") else optimizer.param_groups[0]["lr"]
-        wandb.log({"train_loss": loss, "learning_rate": current_lr}, step=global_step)
+        wandb.log({
+            "train_loss": loss,
+            "learning_rate": current_lr,
+            "train_accuracy": train_acc
+        }, step=global_step)
         
-        pbar.set_postfix({'loss': f'{loss:.4f}', 'lr': f'{current_lr:.6f}'})
+        pbar.set_postfix({'loss': f'{loss:.4f}', 'lr': f'{current_lr:.6f}', 'acc': f'{train_acc:.4f}'})
         pbar.update()
 
         # Validation step every val_interval iterations
         if global_step % args.val_interval == 0:
             avg_train_loss = train_loss_total / args.val_interval
-            avg_val_loss = eval_iteration(model, criterion, val_loader, args.device, args.val_size, args.batch_size)
+            avg_train_acc = train_acc_total / args.val_interval
+            avg_val_loss, avg_val_acc = eval_iteration(model, criterion, val_loader, args.device, args.val_size, args.batch_size)
 
-            # Compute perplexity
+            # Compute perplexity (only if loss is below a threshold to avoid overflow)
             train_perplexity = math.exp(avg_train_loss) if avg_train_loss < 20 else float('inf')
             val_perplexity = math.exp(avg_val_loss) if avg_val_loss < 20 else float('inf')
 
@@ -157,10 +182,13 @@ def main():
                 "avg_val_loss": avg_val_loss,
                 "train_perplexity": train_perplexity,
                 "val_perplexity": val_perplexity,
+                "avg_train_accuracy": avg_train_acc,
+                "avg_val_accuracy": avg_val_acc,
                 "learning_rate": current_lr
             }, step=global_step)
             
             train_loss_total = 0.0  # Reset running loss
+            train_acc_total = 0.0   # Reset running accuracy
 
     pbar.close()
     wandb.finish()
