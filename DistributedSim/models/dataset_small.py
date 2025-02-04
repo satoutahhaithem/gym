@@ -2,7 +2,7 @@ import torch
 from datasets import load_dataset
 import argparse
 
-def get_dataset_small(args):
+def generate_char_vocab():
     vocab = ' !$&\',-.3:;?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz\n'
     char_int = {char: i for i, char in enumerate(vocab)}
     int_char = {i: char for i, char in enumerate(vocab)}
@@ -11,6 +11,10 @@ def get_dataset_small(args):
     eos_token = '<EOS>'
     char_int[eos_token] = len(char_int)
     eos_token_id = char_int[eos_token]
+    return char_int, int_char, eos_token_id
+
+def get_dataset_small(args):
+    char_int, int_char, eos_token_id = generate_char_vocab()
 
     print("Loading dataset: shakespeare")
 
@@ -62,4 +66,9 @@ if __name__ == "__main__":
     args.add_argument("--block_size", type=int, default=1024)
     args = args.parse_args()
 
-    print(get_dataset_small(args))
+    train_data, val_data, vocab_size = get_dataset_small(args)
+    print(train_data.shape, val_data.shape, vocab_size)
+
+    _, int_char, _ = generate_char_vocab()
+
+    print(''.join([int_char[x] for x in train_data[10000:10100].cpu().numpy()]))
