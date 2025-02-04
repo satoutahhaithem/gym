@@ -29,6 +29,7 @@ def main():
     parser.add_argument("--eval_interval", type=int, default=100)
     parser.add_argument("--val_size", type=int, default=256)
     parser.add_argument("--wandb_project", type=str, default="nangpt_singlethread")
+    parser.add_argument("--device", type=str, default='mps')
     args = parser.parse_args()
 
     # Set random seed
@@ -78,7 +79,7 @@ def main():
         wandb_project=args.wandb_project, 
         checkpoint_interval=100,
         eval_interval=args.eval_interval,
-        device='mps',
+        device=args.device,
         val_size=args.val_size,
         seed=args.seed,
     )
