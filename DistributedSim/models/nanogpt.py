@@ -406,6 +406,15 @@ class GPTTrainDataset(torch.utils.data.Dataset):
 
 
 def get_dataset(args):
+    # Check if cached dataset exists
+    cache_dir = os.path.join('cache', args.dataset)
+    cache_file = os.path.join(cache_dir, f'data_block{args.block_size}.pt')
+    
+    if os.path.exists(cache_file):
+        print(f"Loading cached dataset from {cache_file}")
+        cached_data = torch.load(cache_file)
+        return cached_data['train'], cached_data['val'], cached_data['vocab_size']
+
     print(f"Loading dataset: {args.dataset}")
 
     # Load tokenizer
@@ -464,5 +473,15 @@ def get_dataset(args):
     val_data = torch.cat([torch.as_tensor(x) for x in tensor_dataset["test"]["input_ids"] if len(x) > 0], dim=0)
 
     print(f"Train data size: {train_data.shape}, Val data size: {val_data.shape}")
+
+    # Cache the processed dataset
+    os.makedirs(cache_dir, exist_ok=True)
+    torch.save({
+        'train': train_data,
+        'val': val_data,
+        'vocab_size': tokenizer.vocab_size
+    }, cache_file)
+    print(f"Cached dataset saved to {cache_file}")
+
     return train_data, val_data, tokenizer.vocab_size
 
