@@ -28,6 +28,7 @@ def main():
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--eval_interval", type=int, default=100)
     parser.add_argument("--val_size", type=int, default=256)
+    parser.add_argument("--wandb_project", type=str, default="nangpt_singlethread")
     args = parser.parse_args()
 
     # Set random seed
@@ -64,17 +65,17 @@ def main():
         gradient_config=GradientConfig(
             optimizer_class=torch.optim.SGD,
             optimizer_kwargs={
-                # 'lr': args.learning_rate,
+                'lr': 0.001,
             },
             # p_sparta=0.005,
             # async_sparta_delay=0,
-            lr_scheduler='lambda_cosine',
-            warmup_steps=300,
-            cosine_anneal=True,
+            # lr_scheduler='lambda_cosine',
+            # warmup_steps=300,
+            # cosine_anneal=True,
             max_local_steps=1000,
        ),
         save_dir=args.checkpoint_dir,
-        wandb_project="nangpt_singlethread",
+        wandb_project=args.wandb_project, 
         checkpoint_interval=100,
         eval_interval=args.eval_interval,
         device='mps',
