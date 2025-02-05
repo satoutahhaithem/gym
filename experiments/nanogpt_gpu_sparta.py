@@ -31,11 +31,13 @@ def main():
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints")
     parser.add_argument("--seed", type=int, default=1337)
-    parser.add_argument("--test_size", action='store_true')
     parser.add_argument("--gpu_offset", type=int, default=0)
     parser.add_argument("--eval_interval", type=int, default=100)
     parser.add_argument("--wandb_project", type=str, default="nanogpt_small")
     parser.add_argument("--p_sparta", type=float, default=0.005)
+    parser.add_argument(
+        "--model_size", type=str, default="small", choices=["small", "base", "medium", "large", "xl"]
+    )
 
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--learning_rate", type=float, default=0.001)
@@ -65,22 +67,13 @@ def main():
     #                             dtype=np.uint16, train=False)
     args.vocab_size = 50304
 
-    if args.test_size:
-        gpt_config = GPTConfig(
-            block_size=args.block_size,
-            vocab_size=args.vocab_size,
-            n_layer=4,
-            n_head=8,
-            n_embd=256,
-        )
-    else:
-        gpt_config = GPTConfig(
-            block_size=args.block_size,
-            vocab_size=args.vocab_size,
-            n_layer=12,
-            n_head=12,
-            n_embd=768,
-        )
+    gpt_config = {
+        "small": GPTConfig.gpt2_small,
+        "base": GPTConfig.gpt2_base,
+        "medium": GPTConfig.gpt2_medium,
+        "large": GPTConfig.gpt2_large,
+        "xl": GPTConfig.gpt2_xl,
+    }[args.model_size]()
 
     config = SimConfig(
         model_class=GPT,
@@ -97,8 +90,6 @@ def main():
             optimizer_class=torch.optim.Adam,
             optimizer_kwargs={
                 'lr': args.learning_rate,
-                # 'weight_decay': args.weight_decay,
-                # 'betas': (args.beta1, args.beta2),
             },
             p_sparta=args.p_sparta,
             # async_sparta_delay=0,
@@ -114,12 +105,11 @@ def main():
         ),
         save_dir=args.checkpoint_dir,
         checkpoint_interval=1000,
-        wandb_project='wikitext_explore',
+        wandb_project=args.wandb_project,
         wandb_run_name=gen_wandb_name(args.batch_size, 
                                       args.learning_rate,
                                       args.warmup_steps,
                                       args.max_steps),
-        # wandb_project=args.wandb_project,
         device='cuda',
         gpu_offset=args.gpu_offset,
         eval_interval=args.eval_interval,

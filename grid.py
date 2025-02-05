@@ -2,27 +2,31 @@ import argparse
 import random
 import subprocess
 
-def random_search(gpu_offset):
+def random_search(args):
     while True:
         # Define ranges for hyperparameters
-        batch_size = random.choice([4, 8, 16, 32])
+        batch_size = random.choice([4, 8, 16])
         learning_rate = random.uniform(5e-5, 1e-3)
-        warmup_steps = random.randint(300, 2000)
-        max_steps = random.randint(5000, 10000)
+        warmup_steps = random.randint(100, 400)
+        max_steps = random.randint(2000, 5000)
 
         # Construct the command
         command = [
-            "python", "experiments/nanogpt_gpu_sparta.py",
-            "--gpu_offset", str(gpu_offset),
+            "python", "experiments/nanogpt_gpu.py",
+            "--gpu_offset", str(args.gpu_offset),
+            '--dataset', args.dataset,
+            '--wandb_project', f'grid_{args.dataset}',
+            '--model_size', args.model_size,
+
             "--batch_size", str(batch_size),
             "--learning_rate", str(learning_rate),
             "--warmup_steps", str(warmup_steps),
             "--max_steps", str(max_steps),
             # "--max_steps", '10',
-            '--dataset', 'wikitext'
         ]
 
         # Print the command for debugging
+        print(command)
         print("Running command:", " ".join(command))
 
         # Run the command
@@ -36,6 +40,10 @@ def random_search(gpu_offset):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Random search over hyperparameters for nanogpt_gpu_sparts.py")
     parser.add_argument("--gpu_offset", type=int, required=True, help="GPU offset to use")
+    parser.add_argument("--dataset", type=str, help="GPU offset to use")
+    parser.add_argument(
+        "--model_size", type=str, default="small", choices=["small", "base", "medium", "large", "xl"]
+    )
     args = parser.parse_args()
 
-    random_search(args.gpu_offset)
+    random_search(args)
