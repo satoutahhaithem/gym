@@ -28,6 +28,8 @@ class WandbLogger:
             "dataset": self.config.dataset_name,
         })
 
+        print("MODEL PARAMS: ", model.get_num_params() / 1e6)
+
         # Remove unnecessary keys
         keys_to_remove = ['model_class', 'gpt_config', 'train_dataset', 'val_dataset']
         for key in keys_to_remove:

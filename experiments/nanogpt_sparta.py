@@ -15,8 +15,8 @@ from DistributedSim.models.dataset import *
 
 from torch.profiler import profile, record_function, ProfilerActivity
 
-def gen_wandb_name(batch_size, learning_rate, warmup_steps, max_steps):
-    name = f"bs{batch_size}_lr{learning_rate:.0e}_warm{warmup_steps}_max{max_steps}"
+def gen_wandb_name(args):
+    name = f"p{args.p_sparta}_n{args.num_nodes}_lr{args.learning_rate:.0e}"
     return name
 
 def main():
@@ -36,6 +36,7 @@ def main():
     parser.add_argument("--gpu_offset", type=int, default=0)
     parser.add_argument("--eval_interval", type=int, default=100)
     parser.add_argument("--wandb_project", type=str, default="nanogpt_small")
+    parser.add_argument("--wandb_name", type=str, default=None)
     parser.add_argument("--p_sparta", type=float, default=0.005)
     parser.add_argument(
         "--model_size", type=str, default="small", choices=["small", "base", "medium", "large", "xl"]
@@ -81,6 +82,7 @@ def main():
         "large": GPTConfig.gpt2_large,
         "xl": GPTConfig.gpt2_xl,
     }[args.model_size]()
+    gpt_config.vocab_size = args.vocab_size
 
     config = SimConfig(
         model_class=GPT,
@@ -114,11 +116,8 @@ def main():
         save_dir=args.checkpoint_dir,
         checkpoint_interval=1000,
         wandb_project=args.wandb_project,
-        wandb_run_name=gen_wandb_name(args.batch_size, 
-                                      args.learning_rate,
-                                      args.warmup_steps,
-                                      args.max_steps),
-        # device='cuda',
+        wandb_run_name=args.wandb_name if args.wandb_name else gen_wandb_name(args),
+         # device='cuda',
         device='cuda' if not args.cpu else 'cpu',
         gpu_offset=args.gpu_offset,
         eval_interval=args.eval_interval,
