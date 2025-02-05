@@ -13,8 +13,6 @@ from DistributedSim.demo import *
 from DistributedSim.models.nanogpt import *
 from DistributedSim.models.dataset import *
 
-from data import TextDataset
-
 def gen_wandb_name(batch_size, learning_rate, warmup_steps, max_steps):
     name = f"bs{batch_size}_lr{learning_rate:.0e}_warm{warmup_steps}_max{max_steps}"
     return name
@@ -27,6 +25,7 @@ def main():
         "--dataset", type=str, default="shakespeare", help="which dataset to use (shakespeare, wikitext, code, owt)"
     )
     parser.add_argument("--num_nodes", type=int, default=1)
+    parser.add_argument("--cpu", action='store_true')
     parser.add_argument("--block_size", type=int, default=1024)
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints")
@@ -43,6 +42,7 @@ def main():
     parser.add_argument("--learning_rate", type=float, default=0.001)
     parser.add_argument("--warmup_steps", type=int, default=1000)
     parser.add_argument("--max_steps", type=int, default=10000)
+
 
     args = parser.parse_args()
 
@@ -106,7 +106,8 @@ def main():
                                 args.learning_rate,
                                 args.warmup_steps,
                                 args.max_steps),
-        device='cuda',
+        # device='cuda',
+        device='cuda' if not args.cpu else 'cpu',
         gpu_offset=args.gpu_offset,
         eval_interval=args.eval_interval,
         lr_scale=1.0,
