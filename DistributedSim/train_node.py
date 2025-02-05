@@ -14,6 +14,10 @@ from .wandb_logger import *
 
 from tqdm import tqdm
 
+from torch.profiler import profile, record_function, ProfilerActivity
+
+from .timer import Timer
+
 class TrainNode:
     '''
     Single node of distributed training process. Should be the same regardless of rank topology/architecture.
@@ -50,6 +54,9 @@ class TrainNode:
         if self.config.gradient_config.max_local_steps:
             self.max_steps = min(self.max_steps, 
                                  self.config.gradient_config.max_local_steps)
+
+            if not hasattr(self.config.gradient_config, 'max_local_steps'):
+                self.config.gradient_config.max_local_steps = self.max_steps
 
         # if self.rank == 0:
         self.logger = WandbLogger(rank=self.rank, 
@@ -119,10 +126,11 @@ class TrainNode:
 
     def _train_step(self):
         x, y = self._get_batch()
-        
+
         self.gradient_strategy.zero_grad()
 
         output = self.model(x).transpose(1, 2)
+
         loss = self.criterion(output, y)
         loss.backward()
         self.gradient_strategy.step()
@@ -132,8 +140,6 @@ class TrainNode:
 
         if self.local_step % self.config.checkpoint_interval == 0:
             self._save_checkpoint()
-
-        return loss.item()
 
     def _evaluate(self):
         model_clone = self.config.model_class(self.config.gpt_config).to(self.device)
@@ -186,5 +192,6 @@ class TrainNode:
 
             # if self.local_step == 5:
             #     break
+
 
         self._evaluate()

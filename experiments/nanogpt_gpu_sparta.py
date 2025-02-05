@@ -15,6 +15,9 @@ from data import TextDataset
 
 from torch.profiler import profile, record_function, ProfilerActivity
 
+def gen_wandb_name(batch_size, learning_rate, warmup_steps, max_steps):
+    name = f"bs{batch_size}_lr{learning_rate:.0e}_warm{warmup_steps}_max{max_steps}"
+    return name
 
 def main():
     # Command line arguments
@@ -23,14 +26,9 @@ def main():
     parser.add_argument(
         "--dataset", type=str, default="shakespeare", help="which dataset to use (shakespeare, wikitext, code)"
     )
-    parser.add_argument("--num_nodes", type=int, default=2)
+    parser.add_argument("--num_nodes", type=int, default=1)
     parser.add_argument("--block_size", type=int, default=1024)
-    parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--epochs", type=int, default=1)
-    parser.add_argument("--learning_rate", type=float, default=0.001)
-    parser.add_argument("--weight_decay", type=float, default=1e-1)
-    parser.add_argument("--beta1", type=float, default=0.9)
-    parser.add_argument("--beta2", type=float, default=0.95)
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints")
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--test_size", action='store_true')
@@ -38,6 +36,12 @@ def main():
     parser.add_argument("--eval_interval", type=int, default=100)
     parser.add_argument("--wandb_project", type=str, default="nanogpt_small")
     parser.add_argument("--p_sparta", type=float, default=0.005)
+
+    parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--learning_rate", type=float, default=0.001)
+    parser.add_argument("--warmup_steps", type=int, default=1000)
+    parser.add_argument("--max_steps", type=int, default=10000)
+
     args = parser.parse_args()
 
     # Set random seed
@@ -96,13 +100,12 @@ def main():
                 # 'weight_decay': args.weight_decay,
                 # 'betas': (args.beta1, args.beta2),
             },
-            # p_sparta=0.005,
             p_sparta=args.p_sparta,
             # async_sparta_delay=0,
             lr_scheduler='lambda_cosine',
-            warmup_steps=300,
+            warmup_steps=args.warmup_steps,
             cosine_anneal=True,
-            # max_local_steps=3000,
+            max_local_steps=args.max_steps,
             # lr_scheduler=torch.optim.lr_scheduler.StepLR,
             # lr_scheduler_kwargs={
             #     'step_size': 10,
@@ -111,7 +114,12 @@ def main():
         ),
         save_dir=args.checkpoint_dir,
         checkpoint_interval=1000,
-        wandb_project=args.wandb_project,
+        wandb_project='wikitext_explore',
+        wandb_run_name=gen_wandb_name(args.batch_size, 
+                                      args.learning_rate,
+                                      args.warmup_steps,
+                                      args.max_steps),
+        # wandb_project=args.wandb_project,
         device='cuda',
         gpu_offset=args.gpu_offset,
         eval_interval=args.eval_interval,

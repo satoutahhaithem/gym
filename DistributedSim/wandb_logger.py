@@ -36,7 +36,9 @@ class WandbLogger:
 
         # Handle wandb initialization across ranks
         if self.rank == 0:
-            wandb.init(project=self.config.wandb_project, config=wandb_config)
+            wandb.init(project=self.config.wandb_project,
+                       name=config.wandb_run_name, 
+                       config=wandb_config)
             run_id = wandb.run.id
             run_name = wandb.run.name
             # Broadcast run_id and run_name to other ranks
