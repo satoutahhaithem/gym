@@ -12,7 +12,7 @@ from SingleThreadSim.demo import *
 
 from DistributedSim.models.nanogpt import *
 
-from DistributedSim.models.dataset_small import *
+from DistributedSim.models.dataset import *
 
 def main():
     # Command line arguments

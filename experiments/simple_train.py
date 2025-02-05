@@ -6,7 +6,7 @@ import random
 import numpy as np
 from tqdm import tqdm
 
-from DistributedSim.models.dataset_small import *
+from DistributedSim.models.dataset import *
 from DistributedSim.models.nanogpt import *
 
 class GPTTrainDataset(torch.utils.data.Dataset):

@@ -11,6 +11,9 @@ from DistributedSim.gradient_strategy import *
 from DistributedSim.demo import *
 
 from DistributedSim.models.nanogpt import *
+from DistributedSim.models.dataset import *
+
+from data import TextDataset
 
 def gen_wandb_name(batch_size, learning_rate, warmup_steps, max_steps):
     name = f"bs{batch_size}_lr{learning_rate:.0e}_warm{warmup_steps}_max{max_steps}"
@@ -21,7 +24,7 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--dataset", type=str, default="shakespeare", help="which dataset to use (shakespeare, wikitext, code)"
+        "--dataset", type=str, default="shakespeare", help="which dataset to use (shakespeare, wikitext, code, owt)"
     )
     parser.add_argument("--num_nodes", type=int, default=1)
     parser.add_argument("--block_size", type=int, default=1024)
@@ -34,6 +37,7 @@ def main():
     parser.add_argument(
         "--model_size", type=str, default="small", choices=["small", "base", "medium", "large", "xl"]
     )
+    parser.add_argument('--char_dataset', action='store_true')
 
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--learning_rate", type=float, default=0.001)
@@ -50,12 +54,21 @@ def main():
     # torch.backends.cudnn.allow_tf32 = True
 
     # Load dataset from HuggingFace
-    train_data, val_data, args.vocab_size = get_dataset(args)
-    print(f'Vocab size: {args.vocab_size}')
+    if args.dataset == 'owt':
+        train_dataset = TextDataset('../diloco-sim/examples/data/owt/openwebtext.bin', 
+                                    dtype=np.uint16, train=True)
+        val_dataset = TextDataset('../diloco-sim/examples/data/owt/openwebtext.bin', 
+                                    dtype=np.uint16, train=False)
+        args.vocab_size = 50304
+    else:
+        train_data, val_data, args.vocab_size = get_dataset(args, 
+                                                        char=args.char_dataset)
 
-    # Create datasets
-    train_dataset = GPTTrainDataset(train_data, args.block_size)
-    val_dataset = GPTTrainDataset(val_data, args.block_size)
+        # Create datasets
+        train_dataset = GPTTrainDataset(train_data, args.block_size)
+        val_dataset = GPTTrainDataset(val_data, args.block_size)
+    
+    print(f'Vocab size: {args.vocab_size}')
 
     gpt_config = {
         "small": GPTConfig.gpt2_small,
