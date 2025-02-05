@@ -25,6 +25,7 @@ class WandbLogger:
         wandb_config.update({
             "architecture": "GPT",
             "model_parameters": model.get_num_params() / 1e6,
+            "dataset": self.config.dataset_name,
         })
 
         # Remove unnecessary keys

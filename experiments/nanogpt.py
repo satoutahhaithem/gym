@@ -86,6 +86,7 @@ def main():
         num_nodes=args.num_nodes,
         train_dataset=train_dataset,
         val_dataset=val_dataset,
+        datset_name=f'{dataset}_char' if args.char_dataset else dataset,
         batch_size=args.batch_size,
         val_size=256,
         gradient_class=SimpleReduceGradient,

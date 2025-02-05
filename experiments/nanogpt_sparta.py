@@ -27,7 +27,7 @@ def main():
     parser.add_argument(
         "--dataset", type=str, default="shakespeare", help="which dataset to use (shakespeare, wikitext, code, owt)"
     )
-    parser.add_argument("--num_nodes", type=int, default=1)
+    parser.add_argument("--num_nodes", type=int, default=2)
     parser.add_argument("--cpu", action='store_true')
     parser.add_argument("--block_size", type=int, default=1024)
     parser.add_argument("--epochs", type=int, default=1)
@@ -82,29 +82,6 @@ def main():
         "xl": GPTConfig.gpt2_xl,
     }[args.model_size]()
 
-
-    # Load dataset from HuggingFace
-    train_data, val_data, args.vocab_size = get_dataset(args)
-    print(f'Vocab size: {args.vocab_size}')
-
-    # Create datasets
-    train_dataset = GPTTrainDataset(train_data, args.block_size)
-    val_dataset = GPTTrainDataset(val_data, args.block_size)
-
-    # train_dataset = TextDataset('../diloco-sim/examples/data/owt/openwebtext.bin', 
-    #                             dtype=np.uint16, train=True)
-    # val_dataset = TextDataset('../diloco-sim/examples/data/owt/openwebtext.bin', 
-    #                             dtype=np.uint16, train=False)
-    args.vocab_size = 50304
-
-    gpt_config = {
-        "small": GPTConfig.gpt2_small,
-        "base": GPTConfig.gpt2_base,
-        "medium": GPTConfig.gpt2_medium,
-        "large": GPTConfig.gpt2_large,
-        "xl": GPTConfig.gpt2_xl,
-    }[args.model_size]()
-
     config = SimConfig(
         model_class=GPT,
         gpt_config=gpt_config,
@@ -113,6 +90,7 @@ def main():
         num_nodes=args.num_nodes,
         train_dataset=train_dataset,
         val_dataset=val_dataset,
+        datset_name=f'{dataset}_char' if args.char_dataset else dataset,
         batch_size=args.batch_size,
         val_size=256,
         gradient_class=SPARTAGradient,
