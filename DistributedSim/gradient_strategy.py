@@ -12,6 +12,8 @@ import torch.nn.utils as nn_utils
 
 from .demo import *
 
+from .timer import Timer
+
 class GradientConfig:
     def __init__(self, 
                  optimizer_class: Type[torch.optim.Optimizer] = None, 
@@ -132,23 +134,24 @@ class SPARTAGradient(GradientStrategy):
     def step(self):
         self.optim.step()
 
-        with torch.no_grad():
-            for name, param in self.model.named_parameters():
-                if not param.requires_grad:
-                    continue
+        if self.config.num_nodes > 1:
+            with torch.no_grad():
+                for name, param in self.model.named_parameters():
+                    if not param.requires_grad:
+                        continue
 
-                indices = self.index_selector.get_indices(param)
-                dist.broadcast(indices, src=0)
-                sparse_data = param.data[indices]
-                dist.all_reduce(sparse_data, op=dist.ReduceOp.SUM)
-                sparse_data /= dist.get_world_size()
+                    indices = self.index_selector.get_indices(param)
+                    dist.broadcast(indices, src=0)
+                    sparse_data = param.data[indices]
+                    dist.all_reduce(sparse_data, op=dist.ReduceOp.SUM)
+                    sparse_data /= dist.get_world_size()
 
-                param.masked_scatter_(indices, sparse_data)
+                    param.masked_scatter_(indices, sparse_data)
 
-                # self.buffer.append((indices, sparse_data))
-                # if len(self.buffer) > self.gradient_config.async_sparta_delay:
-                    # indices_popped, sparse_data_popped = self.buffer.pop(0)
-                    # param.masked_scatter_(indices_popped, sparse_data_popped)
+                    # self.buffer.append((indices, sparse_data))
+                    # if len(self.buffer) > self.gradient_config.async_sparta_delay:
+                        # indices_popped, sparse_data_popped = self.buffer.pop(0)
+                        # param.masked_scatter_(indices_popped, sparse_data_popped)
 
         super().step()
 

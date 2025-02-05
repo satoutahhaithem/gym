@@ -392,37 +392,70 @@ def identity_loss(x, _):
 
 class GPTTrainDataset(torch.utils.data.Dataset):
     """Simple dataset wrapper for training data"""
-
     def __init__(self, data, block_size):
         self.data = data
         self.block_size = block_size
 
     def __len__(self):
-        return len(self.data) - self.block_size
+        return len(self.data) - self.block_size - 1
 
     def __getitem__(self, idx):
-        x = self.data[idx : idx + self.block_size]
-        return x, x
+        x = self.data[idx : idx + self.block_size + 1]
+        # return x, x
+        return x[:-1], x[1:]
 
 
-def get_dataset(args):
-    # Check if cached dataset exists
-    cache_dir = os.path.join('cache', args.dataset)
-    cache_file = os.path.join(cache_dir, f'data_block{args.block_size}.pt')
-    
-    if os.path.exists(cache_file):
-        print(f"Loading cached dataset from {cache_file}")
-        cached_data = torch.load(cache_file)
-        return cached_data['train'], cached_data['val'], cached_data['vocab_size']
+def get_dataset(args, return_tokenizer=False):
+    """
+    Load and preprocess the dataset with caching.
+
+    This version caches the processed dataset using torch.save() and caches the 
+    tokenizer using its save_pretrained method, allowing for proper serialization.
+    If both the cached dataset and tokenizer exist, they get loaded from disk.
+
+    Args:
+        args: an argparse.Namespace or similar object that should contain at least:
+              - dataset: a string identifier ("shakespeare", "wikitext", or "code")
+              - block_size: the sequence block size to use.
+        return_tokenizer (bool): whether to also return the GPT2Tokenizer.
+
+    Returns:
+        If return_tokenizer is True:
+            tuple: (train_data, val_data, vocab_size, tokenizer)
+        Otherwise:
+            tuple: (train_data, val_data, vocab_size)
+    """
+    import os
+    import torch
+    from transformers import GPT2Tokenizer
+    from datasets import load_dataset
+
+    # Setup cache directory paths.
+    cache_dir = os.path.join("cache", args.dataset)
+    os.makedirs(cache_dir, exist_ok=True)
+    data_cache_file = os.path.join(cache_dir, f"data_block{args.block_size}.pt")
+    tokenizer_cache_dir = os.path.join(cache_dir, "tokenizer")
+    # Here we use the existence of a file (e.g., "vocab.json") to indicate that the tokenizer is cached.
+    tokenizer_cache_file = os.path.join(tokenizer_cache_dir, "vocab.json")
+
+    # If the cached data and tokenizer exist, load both from disk.
+    if os.path.exists(data_cache_file) and os.path.exists(tokenizer_cache_file):
+        print(f"Loading cached dataset from {data_cache_file} and tokenizer from {tokenizer_cache_dir}")
+        cached_data = torch.load(data_cache_file)
+        tokenizer = GPT2Tokenizer.from_pretrained(tokenizer_cache_dir)
+        if return_tokenizer:
+            return cached_data["train"], cached_data["val"], cached_data["vocab_size"], tokenizer
+        else:
+            return cached_data["train"], cached_data["val"], cached_data["vocab_size"]
 
     print(f"Loading dataset: {args.dataset}")
 
-    # Load tokenizer
+    # Load tokenizer from pretrained GPT2.
     tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # Load dataset
+    # Load dataset based on the provided args.dataset value.
     if args.dataset == "shakespeare":
         dataset = load_dataset("Trelis/tiny-shakespeare")
         text_column = "Text"
@@ -440,25 +473,22 @@ def get_dataset(args):
     def tokenize_function(examples):
         return tokenizer(examples[text_column], truncation=True, max_length=args.block_size)
 
-    # Tokenize dataset
+    # Tokenize the dataset.
     print("Tokenizing dataset...")
     tokenized_dataset = dataset.map(tokenize_function, batched=True, remove_columns=dataset["train"].column_names)
 
-    # Convert to torch tensors
+    # Convert tokenized texts to torch tensors.
     def convert_to_tensor(examples):
         all_ids = []
         for ids in examples["input_ids"]:
-            if len(ids) > 0:  # Skip empty sequences
+            if len(ids) > 0:  # Skip empty sequences.
                 all_ids.extend(ids + [tokenizer.eos_token_id])
-
         if len(all_ids) == 0:
             return {"input_ids": torch.tensor([])}
-
-        # Make sure we have complete blocks
+        # Ensure that we have complete blocks.
         num_blocks = len(all_ids) // args.block_size
         if num_blocks == 0:
             return {"input_ids": torch.tensor([])}
-
         all_ids = all_ids[: num_blocks * args.block_size]
         tensor_data = torch.tensor(all_ids).view(-1, args.block_size)
         return {"input_ids": tensor_data}
@@ -468,20 +498,30 @@ def get_dataset(args):
         convert_to_tensor, batched=True, remove_columns=tokenized_dataset["train"].column_names
     )
 
-    # Extract and concatenate all tensors
-    train_data = torch.cat([torch.as_tensor(x) for x in tensor_dataset["train"]["input_ids"] if len(x) > 0], dim=0)
-    val_data = torch.cat([torch.as_tensor(x) for x in tensor_dataset["test"]["input_ids"] if len(x) > 0], dim=0)
+    # Extract and concatenate the training and validation tensors.
+    train_data = torch.cat(
+        [torch.as_tensor(x) for x in tensor_dataset["train"]["input_ids"] if len(x) > 0], dim=0
+    )
+    val_data = torch.cat(
+        [torch.as_tensor(x) for x in tensor_dataset["test"]["input_ids"] if len(x) > 0], dim=0
+    )
 
     print(f"Train data size: {train_data.shape}, Val data size: {val_data.shape}")
 
-    # Cache the processed dataset
-    os.makedirs(cache_dir, exist_ok=True)
+    # Cache the processed dataset.
     torch.save({
-        'train': train_data,
-        'val': val_data,
-        'vocab_size': tokenizer.vocab_size
-    }, cache_file)
-    print(f"Cached dataset saved to {cache_file}")
+        "train": train_data,
+        "val": val_data,
+        "vocab_size": tokenizer.vocab_size,
+    }, data_cache_file)
+    print(f"Cached dataset saved to {data_cache_file}")
 
-    return train_data, val_data, tokenizer.vocab_size
+    # Cache the tokenizer using its save_pretrained method.
+    os.makedirs(tokenizer_cache_dir, exist_ok=True)
+    tokenizer.save_pretrained(tokenizer_cache_dir)
+    print(f"Cached tokenizer saved to {tokenizer_cache_dir}")
 
+    if return_tokenizer:
+        return train_data, val_data, tokenizer.vocab_size, tokenizer
+    else:
+        return train_data, val_data, tokenizer.vocab_size

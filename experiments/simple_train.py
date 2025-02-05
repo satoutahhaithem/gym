@@ -16,11 +16,12 @@ class GPTTrainDataset(torch.utils.data.Dataset):
         self.block_size = block_size
 
     def __len__(self):
-        return len(self.data) - self.block_size
+        return len(self.data) - self.block_size - 1
 
     def __getitem__(self, idx):
-        x = self.data[idx : idx + self.block_size]
-        return x, x
+        x = self.data[idx : idx + self.block_size + 1]
+        # return x, x
+        return x[:-1], x[1:]
 
 def train_iteration(model, optimizer, scheduler, criterion, batch, device):
     """
@@ -100,7 +101,7 @@ def main():
 
     # Load dataset (train_data and val_data are 1D tensors of ints)
     # train_data, val_data, vocab_size = get_dataset_small(args)
-    train_data, val_data, vocab_size = get_dataset(args)
+    train_data, val_data, vocab_size, tokenizer = get_dataset(args, return_tokenizer=True)
     
     # Create datasets and dataloaders
     train_dataset = GPTTrainDataset(train_data, args.block_size)
@@ -110,11 +111,18 @@ def main():
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
 
     # Initialize the model
-    model = GPT(GPTConfig(vocab_size=vocab_size, 
-                          block_size=args.block_size, 
-                          n_layer=2, 
-                          n_head=2, 
-                          n_embd=128))
+    model = GPT(GPTConfig(
+            block_size=args.block_size,
+            vocab_size=vocab_size,
+            n_layer=12,
+            n_head=12,
+            n_embd=768,
+        ))
+    # model = GPT(GPTConfig(vocab_size=vocab_size, 
+    #                       block_size=args.block_size, 
+    #                       n_layer=2, 
+    #                       n_head=2, 
+    #                       n_embd=128))
     model.to(args.device)
     model.train()
 
@@ -149,6 +157,14 @@ def main():
         except StopIteration:
             train_iter = iter(train_loader)
             batch = next(train_iter)
+
+        # print(batch[0].shape, batch[1].shape)
+        # # print(tokenizer.decode(batch[0][0,:], skip_special_tokens=True))
+        # print(batch[0][0,:])
+        # print('GAPGAPGAPGAPGAPGAP')
+        # print(batch[1][0,:])
+        # # print(tokenizer.decode(batch[1][0,:], skip_special_tokens=True))
+        
             
         # Training step with accuracy computation
         loss, train_acc = train_iteration(model, optimizer, scheduler, criterion, batch, args.device)
