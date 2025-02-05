@@ -52,13 +52,14 @@ class LocalSimBuilder(SimBuilder):
         All ranks are assumed to be on the same machine, and device is defaulted to cpu.
         '''
         os.environ['MASTER_ADDR'] = 'localhost'
-        os.environ['MASTER_PORT'] = '12355'
+        os.environ['MASTER_PORT'] = str(12355 + self.config.gpu_offset - (10 if self.config.device == 'cpu' else 0))
 
         # initialize the process group
         if self.config.device == 'cuda':
             dist.init_process_group("gloo", rank=self.rank, world_size=self.config.num_nodes)
             # dist.init_process_group("nccl", rank=self.rank, world_size=self.config.num_nodes)
-            self.device = torch.device(f"cuda:{(self.rank + self.config.gpu_offset) % torch.cuda.device_count()}")
+            # self.device = torch.device(f"cuda:{(self.rank + self.config.gpu_offset) % torch.cuda.device_count()}")
+            self.device = torch.device(f"cuda:{(self.config.gpu_offset) % torch.cuda.device_count()}")
         else:
             dist.init_process_group("gloo", rank=self.rank, world_size=self.config.num_nodes)
             self.device = torch.device("cpu")

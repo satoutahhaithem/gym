@@ -2,6 +2,7 @@ import torch
 from datasets import load_dataset
 import argparse
 import numpy as np
+import math
 from torch.utils.data import Dataset
 
 def generate_char_vocab():
