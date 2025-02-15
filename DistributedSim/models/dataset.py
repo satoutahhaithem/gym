@@ -3,10 +3,10 @@ from datasets import load_dataset
 import argparse
 import numpy as np
 import math
-from torch.utils.data import Dataset
 import os
 import torch
 from datasets import load_dataset
+from datasets import Dataset, DatasetDict
 
 def generate_char_vocab():
     """
@@ -21,7 +21,7 @@ def generate_char_vocab():
     eos_token = '<EOS>'
     char_int[eos_token] = len(char_int)
     eos_token_id = char_int[eos_token]
-    return char_int, int_char, eos_token_id
+    return char_int, eos_token_id
 
 def get_dataset(dataset, block_size=1024, char=False):
     """
@@ -36,13 +36,7 @@ def get_dataset(dataset, block_size=1024, char=False):
         char (bool): If True, use character-level tokenization; otherwise, use GPT-2 tokenization.
 
     Returns:
-        - If return_tokenizer is False:
-             (train_data, val_data, vocab_size)
-        - If return_tokenizer is True:
-             If char is True: (train_data, val_data, vocab_size, tokenizer_info)
-                              where tokenizer_info is a dict containing
-                              "char_int", "int_char", and "eos_token_id".
-             Otherwise: (train_data, val_data, vocab_size, GPT2Tokenizer)
+        (train_data, val_data, vocab_size)
     """
 
     # Decide cache locations based on tokenization mode.
@@ -60,31 +54,38 @@ def get_dataset(dataset, block_size=1024, char=False):
         cached_data = torch.load(data_cache_file)
         return cached_data["train"], cached_data["val"], cached_data["vocab_size"]
 
-    # Load the raw dataset.
+    # Load the raw dataset and standardize to simple text format
     print(f"Loading dataset: {dataset} {'(char-level)' if char else '(GPT2 tokenization)'}")
     if dataset == "shakespeare":
-        dataset = load_dataset("Trelis/tiny-shakespeare")
-        text_column = "Text"
+        raw_dataset = load_dataset("Trelis/tiny-shakespeare")
+        train_texts = [text["Text"] for text in raw_dataset["train"]]
+        test_texts = [text["Text"] for text in raw_dataset["test"]]
     elif dataset == "wikitext":
-        dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
-        text_column = "text"
+        raw_dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
+        train_texts = [text for text in raw_dataset["train"]["text"] if text.strip()]
+        test_texts = [text for text in raw_dataset["test"]["text"] if text.strip()]
     elif dataset == "code":
-        dataset = load_dataset("codeparrot/codeparrot-clean-train", split="train[:1%]")
-        text_column = "content"
+        raw_dataset = load_dataset("codeparrot/codeparrot-clean-train", split="train[:1%]")
+        train_texts = [text for text in raw_dataset["content"]]
+        # Since this dataset doesn't come with a test split, create one
+        split_idx = int(len(train_texts) * 0.9)
+        test_texts = train_texts[split_idx:]
+        train_texts = train_texts[:split_idx]
     else:
         raise ValueError(f"Unknown dataset: {dataset}")
+
+    # Create standardized dataset format using datasets.Dataset
+    standardized_dataset = DatasetDict({
+        "train": Dataset.from_dict({"text": train_texts}),
+        "test": Dataset.from_dict({"text": test_texts})
+    })
 
     # Initialize the tokenizer
     if char:
         # Use character-based tokenization
-        char_int, int_char, eos_token_id = generate_char_vocab()
+        char_int, eos_token_id = generate_char_vocab()
         vocab_size = len(char_int)
-        
-        def custom_tokenize(text):
-            if isinstance(text, str):
-                return {"input_ids": [char_int[c] for c in text]}
-            return {"input_ids": [char_int[c] for c in text[text_column]]}
-            
+        custom_tokenize = lambda text: {"input_ids": [char_int[c] for c in text["text"]]}
     else:
         # Use GPT2 tokenizer
         from transformers import GPT2Tokenizer
@@ -93,17 +94,12 @@ def get_dataset(dataset, block_size=1024, char=False):
             tokenizer.pad_token = tokenizer.eos_token
         vocab_size = tokenizer.vocab_size
         eos_token_id = tokenizer.eos_token_id
-        
-        def custom_tokenize(text):
-            if isinstance(text, str):
-                return tokenizer(text, truncation=True, max_length=block_size)
-            return tokenizer(text[text_column], truncation=True, max_length=block_size)
+        custom_tokenize = lambda text: tokenizer(text["text"], truncation=True, max_length=block_size)
 
     print("Tokenizing dataset...")
-    tokenized_dataset = dataset.map(
+    tokenized_dataset = standardized_dataset.map(
         custom_tokenize,
-        batched=True,
-        remove_columns=dataset["train"].column_names
+        remove_columns=["text"]
     )
 
     # Convert tokenized lists to tensors with fixed block size
@@ -112,13 +108,14 @@ def get_dataset(dataset, block_size=1024, char=False):
         for ids in examples["input_ids"]:
             if len(ids) > 0:
                 all_ids.extend(ids + [eos_token_id])
-        if len(all_ids) == 0:
-            return {"input_ids": torch.tensor([])}
+
         num_blocks = len(all_ids) // block_size
-        if num_blocks == 0:
+        if len(all_ids) == 0 or num_blocks == 0:
             return {"input_ids": torch.tensor([])}
+
         all_ids = all_ids[: num_blocks * block_size]
         tensor_data = torch.tensor(all_ids).view(-1, block_size)
+
         return {"input_ids": tensor_data}
 
     print("Converting tokenized dataset to tensors...")
@@ -171,45 +168,45 @@ if __name__ == "__main__":
         sample_text = tokenizer.decode(train_data[10000:10100].cpu().numpy().tolist())
         print(sample_text)
 
-class TextDataset(Dataset):
-    def __init__(self, bin_file_path, dtype=np.int32, seq_length=1024, train=False):
-        """
-        Args:
-            bin_file_path (str): Path to the .bin file.
-            dtype (type): Data type of the tokenized data (default: np.int32).
-            seq_length (int): The fixed length of each sequence (x).
-        """
-        self.bin_file_path = bin_file_path
-        self.dtype = dtype
-        self.seq_length = seq_length
+# class TextDataset(Dataset):
+#     def __init__(self, bin_file_path, dtype=np.int32, seq_length=1024, train=False):
+#         """
+#         Args:
+#             bin_file_path (str): Path to the .bin file.
+#             dtype (type): Data type of the tokenized data (default: np.int32).
+#             seq_length (int): The fixed length of each sequence (x).
+#         """
+#         self.bin_file_path = bin_file_path
+#         self.dtype = dtype
+#         self.seq_length = seq_length
 
-        # Create a memmap object for the entire binary file
-        self.data = np.memmap(self.bin_file_path, dtype=self.dtype, mode="r")
-        if train:
-            self.data = self.data[:int(len(self.data) * 0.9)]
-        else:
-            self.data = self.data[int(len(self.data) * 0.9):]
+#         # Create a memmap object for the entire binary file
+#         self.data = np.memmap(self.bin_file_path, dtype=self.dtype, mode="r")
+#         if train:
+#             self.data = self.data[:int(len(self.data) * 0.9)]
+#         else:
+#             self.data = self.data[int(len(self.data) * 0.9):]
 
-        # Compute the total number of tokens in the dataset
-        self.num_tokens = len(self.data)
+#         # Compute the total number of tokens in the dataset
+#         self.num_tokens = len(self.data)
 
-        # Calculate how many sequences we can extract given the context length
-        self.num_sequences = math.floor(self.num_tokens / (self.seq_length + 1))
+#         # Calculate how many sequences we can extract given the context length
+#         self.num_sequences = math.floor(self.num_tokens / (self.seq_length + 1))
 
-    def __len__(self):
-        # Return the number of sequences available based on the fixed seq_length
-        return self.num_sequences
+#     def __len__(self):
+#         # Return the number of sequences available based on the fixed seq_length
+#         return self.num_sequences
 
-    def __getitem__(self, idx):
-        """
-        Get the sequence at index idx.
-        Returns the token IDs (x) and the next token (y) as a torch tensor.
-        """
-        start_idx = idx * (self.seq_length + 1)
-        end_idx = start_idx + (self.seq_length + 1)
-        sequence = self.data[start_idx:end_idx].astype(np.int32)
+#     def __getitem__(self, idx):
+#         """
+#         Get the sequence at index idx.
+#         Returns the token IDs (x) and the next token (y) as a torch tensor.
+#         """
+#         start_idx = idx * (self.seq_length + 1)
+#         end_idx = start_idx + (self.seq_length + 1)
+#         sequence = self.data[start_idx:end_idx].astype(np.int32)
 
-        x = torch.tensor(sequence[:-1], dtype=torch.long)  # Input sequence
-        y = torch.tensor(sequence[1:], dtype=torch.long)
+#         x = torch.tensor(sequence[:-1], dtype=torch.long)  # Input sequence
+#         y = torch.tensor(sequence[1:], dtype=torch.long)
 
-        return x, y
+#         return x, y
