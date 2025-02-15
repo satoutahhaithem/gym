@@ -55,16 +55,21 @@ class LocalSimBuilder(SimBuilder):
         os.environ['MASTER_PORT'] = str(12355 + self.config.gpu_offset - (10 if self.config.device == 'cpu' else 0))
 
         # initialize the process group
-        if self.config.device == 'cuda':
-            dist.init_process_group("gloo", rank=self.rank, world_size=self.config.num_nodes)
-            # dist.init_process_group("nccl", rank=self.rank, world_size=self.config.num_nodes)
-            # self.device = torch.device(f"cuda:{(self.rank + self.config.gpu_offset) % torch.cuda.device_count()}")
-            self.device = torch.device(f"cuda:{(self.config.gpu_offset) % torch.cuda.device_count()}")
-        else:
-            dist.init_process_group("gloo", rank=self.rank, world_size=self.config.num_nodes)
+        if self.config.device_type == 'cuda':
+            dist.init_process_group("nccl" if len(self.config.devices) == self.config.num_nodes else "gloo", 
+                                    rank=self.rank, 
+                                    world_size=self.config.num_nodes)
+            self.device = torch.device(f"cuda:{self.config.devices[self.rank % len(self.config.devices)]}")
+            torch.cuda.set_device(self.device)
+        elif self.config.device_type == 'cpu':
+            dist.init_process_group("gloo", 
+                                    rank=self.rank, 
+                                    world_size=self.config.num_nodes)
             self.device = torch.device("cpu")
+        else:
+            raise ValueError(f"Invalid device type: {self.config.device}")
 
-        print(self.device)
+        print(f"Rank {self.rank} using device {self.device}")
 
 class SingleSimBuilder(SimBuilder):
     def _build_connection(self):

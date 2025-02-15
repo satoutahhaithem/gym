@@ -24,11 +24,11 @@ def main():
     )
     parser.add_argument("--num_nodes", type=int, default=1)
     parser.add_argument("--device_type", type=str, default="cuda")
+    parser.add_argument("--devices", type=int, nargs="+", default=None)
     parser.add_argument("--block_size", type=int, default=1024)
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints")
     parser.add_argument("--seed", type=int, default=1337)
-    parser.add_argument("--gpu_offset", type=int, default=0)
     parser.add_argument("--eval_interval", type=int, default=100)
     parser.add_argument("--wandb_project", type=str, default="nanogpt_small")
     parser.add_argument("--wandb_name", type=str, default=None)
@@ -67,14 +67,22 @@ def main():
     config = SimConfig(
         model_class=GPT,
         gpt_config=gpt_config,
-        criterion_class=torch.nn.CrossEntropyLoss,
+
         num_epochs=args.epochs,
         num_nodes=args.num_nodes,
+        device_type=args.device_type,
+        gpu_offset=args.gpu_offset,
+
         train_dataset=train_dataset,
         val_dataset=val_dataset,
         dataset_name=f'{args.dataset}_char' if args.char_dataset else args.dataset,
         batch_size=args.batch_size,
         val_size=256,
+        save_dir=args.checkpoint_dir,
+        checkpoint_interval=1000,
+        eval_interval=args.eval_interval,
+
+        criterion_class=torch.nn.CrossEntropyLoss,
         gradient_class=SimpleReduceGradient,
         gradient_config=GradientConfig(
             optimizer_class=torch.optim.Adam,
@@ -86,14 +94,10 @@ def main():
             cosine_anneal=args.cosine_anneal,
             max_local_steps=args.max_steps,        
         ),
-        save_dir=args.checkpoint_dir,
-        checkpoint_interval=1000,
+
+        seed=args.seed,
         wandb_project=args.wandb_project,
         wandb_run_name=args.wandb_name if args.wandb_name else gen_wandb_name(args),
-        device_type=args.device_type,
-        gpu_offset=args.gpu_offset,
-        eval_interval=args.eval_interval,
-        seed=args.seed,
     )
 
     simbuilder = LocalSimBuilder(config)
