@@ -143,6 +143,16 @@ class GPTConfig:
     bias: bool = True  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
 
     @classmethod
+    def gpt2_size_map(cls, size):
+        return {
+            "small": cls.gpt2_small,
+            "base": cls.gpt2_base,
+            "medium": cls.gpt2_medium,
+            "large": cls.gpt2_large,
+            "xl": cls.gpt2_xl,
+        }[size]()
+
+    @classmethod
     def gpt2_small(cls):
         return cls(n_layer=4, n_head=4, n_embd=128)
         # return cls(n_layer=4, n_head=8, n_embd=256)
@@ -384,11 +394,6 @@ class GPT(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
 
         return idx
-
-
-# add diloco support
-def identity_loss(x, _):
-    return x
 
 
 class GPTTrainDataset(torch.utils.data.Dataset):

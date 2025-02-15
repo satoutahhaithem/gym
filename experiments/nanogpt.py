@@ -1,6 +1,4 @@
 import torch
-import torch.nn as nn
-from torch.nn import functional as F
 
 import argparse
 import numpy as np
@@ -10,7 +8,7 @@ from DistributedSim.sim_config import *
 from DistributedSim.gradient_strategy import *
 from DistributedSim.demo import *
 
-from DistributedSim.models.nanogpt import *
+from DistributedSim.models.nanogpt import GPT, GPTConfig, GPTTrainDataset
 from DistributedSim.models.dataset import *
 
 def gen_wandb_name(args):
@@ -25,7 +23,7 @@ def main():
         "--dataset", type=str, default="shakespeare", help="which dataset to use (shakespeare, wikitext, code, owt)"
     )
     parser.add_argument("--num_nodes", type=int, default=1)
-    parser.add_argument("--cpu", action='store_true')
+    parser.add_argument("--device_type", type=str, default="cuda")
     parser.add_argument("--block_size", type=int, default=1024)
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints")
@@ -43,41 +41,27 @@ def main():
     parser.add_argument("--learning_rate", type=float, default=0.001)
     parser.add_argument("--warmup_steps", type=int, default=1000)
     parser.add_argument("--max_steps", type=int, default=10000)
+    parser.add_argument("--cosine_anneal", action='store_true')
 
     args = parser.parse_args()
 
-    # Set random seed
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
     np.random.seed(args.seed)
-    # torch.backends.cuda.matmul.allow_tf32 = True
-    # torch.backends.cudnn.allow_tf32 = True
 
-    # Load dataset from HuggingFace
-    if args.dataset == 'owt':
-        train_dataset = TextDataset('../diloco-sim/examples/data/owt/openwebtext.bin', 
-                                    dtype=np.uint16, train=True)
-        val_dataset = TextDataset('../diloco-sim/examples/data/owt/openwebtext.bin', 
-                                    dtype=np.uint16, train=False)
-        args.vocab_size = 50304
-    else:
-        train_data, val_data, args.vocab_size = get_dataset(args.dataset, 
-                                                            block_size=args.block_size, 
-                                                            char=args.char_dataset)
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
 
-        # Create datasets
-        train_dataset = GPTTrainDataset(train_data, args.block_size)
-        val_dataset = GPTTrainDataset(val_data, args.block_size)
+    train_data, val_data, args.vocab_size = get_dataset(args.dataset, 
+                                                        block_size=args.block_size, 
+                                                        char=args.char_dataset)
+
+    train_dataset = GPTTrainDataset(train_data, args.block_size)
+    val_dataset = GPTTrainDataset(val_data, args.block_size)
     
     print(f'Vocab size: {args.vocab_size}')
 
-    gpt_config = {
-        "small": GPTConfig.gpt2_small,
-        "base": GPTConfig.gpt2_base,
-        "medium": GPTConfig.gpt2_medium,
-        "large": GPTConfig.gpt2_large,
-        "xl": GPTConfig.gpt2_xl,
-    }[args.model_size]()
+    gpt_config = GPTConfig.gpt2_size_map(args.model_size)
     gpt_config.vocab_size = args.vocab_size
 
     config = SimConfig(
@@ -99,18 +83,16 @@ def main():
             },
             lr_scheduler='lambda_cosine',
             warmup_steps=args.warmup_steps,
-            cosine_anneal=True,
+            cosine_anneal=args.cosine_anneal,
             max_local_steps=args.max_steps,        
         ),
         save_dir=args.checkpoint_dir,
         checkpoint_interval=1000,
         wandb_project=args.wandb_project,
         wandb_run_name=args.wandb_name if args.wandb_name else gen_wandb_name(args),
-        # device='cuda',
-        device='cuda' if not args.cpu else 'cpu',
+        device_type=args.device_type,
         gpu_offset=args.gpu_offset,
         eval_interval=args.eval_interval,
-        lr_scale=1.0,
         seed=args.seed,
     )
 
