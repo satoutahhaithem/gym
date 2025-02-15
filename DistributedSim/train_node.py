@@ -11,6 +11,7 @@ import copy
 from .sim_config import *
 from .gradient_strategy import *
 from .wandb_logger import *
+from .communicate import *
 
 from tqdm import tqdm
 
@@ -43,7 +44,7 @@ class TrainNode:
         ## Ensure all process models share the same params
         if self.config.num_nodes > 1:
             for _, param in self.model.named_parameters():
-                dist.broadcast(param.data, src=0)
+                broadcast(param.data, src=0)
 
         self.build_dataloaders()
 
@@ -147,7 +148,7 @@ class TrainNode:
         model_clone.load_state_dict(copy.deepcopy(self.model.state_dict()))
 
         for name, param in model_clone.named_parameters():
-            dist.all_reduce(param.data, op=dist.ReduceOp.SUM)
+            all_reduce(param.data, op=dist.ReduceOp.SUM)
             param.data = param.data / dist.get_world_size()
 
         if self.rank == 0:
@@ -186,7 +187,7 @@ class TrainNode:
             global_loss_tensor = torch.empty(1, device=next(self.model.parameters()).device)
             if self.rank == 1:
                 global_loss_tensor[0] = loss_total / int(self.config.val_size / self.config.batch_size)
-            torch.distributed.broadcast(global_loss_tensor, src=1)
+            broadcast(global_loss_tensor, src=1)
 
             # Only rank 0 logs the global evaluation.
             if self.rank == 0:

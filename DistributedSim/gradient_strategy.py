@@ -10,6 +10,7 @@ from abc import ABC, abstractmethod
 
 import torch.nn.utils as nn_utils
 
+from .communicate import *
 from .demo import *
 
 from .timer import Timer
@@ -66,7 +67,7 @@ class GradientStrategy:
         self.nbytes += nbytes
 
         if self.config.num_nodes > 1:
-            tensor_handle = dist.all_gather(tensor_list, tensor, group, async_op)
+            tensor_handle = all_gather(tensor_list, tensor, group, async_op)
         else:
             tensor_list[0] = tensor
             tensor_handle = tensor_list[0]
@@ -108,7 +109,7 @@ class SimpleReduceGradient(GradientStrategy):
         if self.config.num_nodes > 1 or True:
             for param in self.model.parameters():
                 if param.grad is not None:
-                    dist.all_reduce(param.grad)
+                    all_reduce(param.grad)
                     param.grad.div_(dist.get_world_size())
 
             if self.gradient_config.max_norm:
@@ -141,9 +142,9 @@ class SPARTAGradient(GradientStrategy):
                         continue
 
                     indices = self.index_selector.get_indices(param)
-                    dist.broadcast(indices, src=0)
+                    broadcast(indices, src=0)
                     sparse_data = param.data[indices]
-                    dist.all_reduce(sparse_data, op=dist.ReduceOp.SUM)
+                    all_reduce(sparse_data, op=dist.ReduceOp.SUM)
                     sparse_data /= dist.get_world_size()
 
                     param.masked_scatter_(indices, sparse_data)
