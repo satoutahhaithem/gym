@@ -76,16 +76,16 @@ class GradientStrategy:
     def _setup_scheduler(self):
         def lr_lambda(current_step):
             if current_step < self.gradient_config.warmup_steps:
-                return self.config.lr_scale * float(current_step) / float(max(self.gradient_config.warmup_steps, 1))
+                return float(current_step) / float(max(self.gradient_config.warmup_steps, 1))
             elif self.gradient_config.cosine_anneal:
                 min_lr_factor = 0.1
                 progress = (current_step - self.gradient_config.warmup_steps) / float(
                     max(1, self.gradient_config.max_local_steps - self.gradient_config.warmup_steps)
                 )
                 cosine_term = 0.5 * (1.0 + math.cos(math.pi * progress))
-                return self.config.lr_scale * (1 - min_lr_factor) * cosine_term + min_lr_factor
+                return (1 - min_lr_factor) * cosine_term + min_lr_factor
             else:
-                return self.config.lr_scale * 1.0
+                return 1.0
             
         if self.gradient_config.lr_scheduler == 'lambda_cosine':
             self.scheduler = LambdaLR(self.optim, lr_lambda)
@@ -111,8 +111,8 @@ class SimpleReduceGradient(GradientStrategy):
                     dist.all_reduce(param.grad)
                     param.grad.div_(dist.get_world_size())
 
-            # if self.gradient_config.max_norm:
-            #     nn_utils.clip_grad_norm_(self.model.parameters(), max_norm=self.gradient_config.max_norm)
+            if self.gradient_config.max_norm:
+                nn_utils.clip_grad_norm_(self.model.parameters(), max_norm=self.gradient_config.max_norm)
 
         self.optim.step()
 
@@ -194,33 +194,6 @@ class PartitionedIndexSelector(IndexSelector):
 
         return indices
 
-
-class SimpleGatherGradient(GradientStrategy):
-    def __init__(self, rank, model, config, logger=None):
-        super().__init__(rank, model, config, logger)
-        self.optim = self.gradient_config.optimizer_class(model.parameters(), 
-                                                          **self.gradient_config.optimizer_kwargs)
-        self._setup_scheduler()
-
-    def step(self):
-        for name, param in self.model.named_parameters():
-            if param.grad is not None:
-                # Initialize a list to hold the gathered gradients for this parameter.
-                gathered_gradients = [torch.zeros_like(param.grad) for _ in range(self.config.num_nodes)]
-
-                # Use all_gather to collect gradients from all processes.
-                super().all_gather(gathered_gradients, param.grad)
-
-                # Manually average the gathered gradients.
-                avg_gradient = sum(gathered_gradients) / self.config.num_nodes
-
-                # Update the gradient of the parameter to the averaged gradient.
-                param.grad.copy_(avg_gradient)
-
-        # Perform the optimization step.
-        self.optim.step()
-
-        super().step()
 
 class DeMoGradient(GradientStrategy):
     def __init__(self, rank, model, config, logger=None):

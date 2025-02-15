@@ -138,7 +138,7 @@ class TrainNode:
         if self.rank == 0:
             self.logger.log_train(loss=loss.item())
 
-        if self.local_step % self.config.checkpoint_interval == 0:
+        if self.config.checkpoint_interval and self.local_step % self.config.checkpoint_interval == 0:
             self._save_checkpoint()
 
     def _evaluate(self):

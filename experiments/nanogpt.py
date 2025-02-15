@@ -28,6 +28,7 @@ def main():
     parser.add_argument("--block_size", type=int, default=1024)
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints")
+    parser.add_argument("--checkpoint_interval", type=int, default=None)
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--eval_interval", type=int, default=100)
     parser.add_argument("--wandb_project", type=str, default="nanogpt_small")
@@ -39,6 +40,7 @@ def main():
 
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--learning_rate", type=float, default=0.001)
+    parser.add_argument("--max_norm", type=float, default=1.0)
     parser.add_argument("--warmup_steps", type=int, default=1000)
     parser.add_argument("--max_steps", type=int, default=10000)
     parser.add_argument("--cosine_anneal", action='store_true')
@@ -71,7 +73,6 @@ def main():
         num_epochs=args.epochs,
         num_nodes=args.num_nodes,
         device_type=args.device_type,
-        gpu_offset=args.gpu_offset,
 
         train_dataset=train_dataset,
         val_dataset=val_dataset,
@@ -79,7 +80,7 @@ def main():
         batch_size=args.batch_size,
         val_size=256,
         save_dir=args.checkpoint_dir,
-        checkpoint_interval=1000,
+        checkpoint_interval=args.checkpoint_interval,
         eval_interval=args.eval_interval,
 
         criterion_class=torch.nn.CrossEntropyLoss,
@@ -89,6 +90,7 @@ def main():
             optimizer_kwargs={
                 'lr': args.learning_rate,
             },
+            max_norm=args.max_norm,
             lr_scheduler='lambda_cosine',
             warmup_steps=args.warmup_steps,
             cosine_anneal=args.cosine_anneal,
@@ -99,6 +101,7 @@ def main():
         wandb_project=args.wandb_project,
         wandb_run_name=args.wandb_name if args.wandb_name else gen_wandb_name(args),
     )
+
 
     simbuilder = LocalSimBuilder(config)
 
