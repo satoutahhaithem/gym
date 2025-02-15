@@ -20,6 +20,7 @@ class SimConfig:
                  gpu_offset: int = 0,
                  device: str = 'cpu',
                  checkpoint_interval: int = 100,
+                 diloco_interval: int = 1000,
                  **kwargs):
         self.num_nodes = num_nodes
 
