@@ -66,6 +66,11 @@ class LocalSimBuilder(SimBuilder):
                                     rank=self.rank, 
                                     world_size=self.config.num_nodes)
             self.device = torch.device("cpu")
+        elif self.config.device_type == 'mps':
+            dist.init_process_group("gloo", 
+                                    rank=self.rank, 
+                                    world_size=self.config.num_nodes)
+            self.device = torch.device("mps")
         else:
             raise ValueError(f"Invalid device type: {self.config.device}")
 

@@ -58,13 +58,13 @@ class TrainNode:
             if not hasattr(self.config.gradient_config, 'max_local_steps'):
                 self.config.gradient_config.max_local_steps = self.max_steps
 
-        # if self.rank == 0:
-        self.logger = WandbLogger(rank=self.rank, 
-                                  device=self.device, 
-                                  config=self.config, 
-                                  model=self.model, 
-                                  max_steps=self.max_steps, 
-                                  project=self.config.wandb_project)
+        if self.rank == 0:
+            self.logger = WandbLogger(rank=self.rank, 
+                                      device=self.device, 
+                                      config=self.config, 
+                                      model=self.model, 
+                                      max_steps=self.max_steps, 
+                                      project=self.config.wandb_project)
 
         self.gradient_strategy = self.config.gradient_class(self.rank, 
                                                             self.model, 
@@ -74,7 +74,7 @@ class TrainNode:
         self.train_data_iter = iter(self.train_dataloader)
         self.val_data_iter = iter(self.val_dataloader)
 
-        self.first = True
+        self.epoch = 0
         
     
     def build_dataloaders(self):
@@ -96,19 +96,20 @@ class TrainNode:
                           shuffle=True)
 
     def _save_checkpoint(self):
-        if not os.path.exists(os.path.join(self.config.save_dir, self.config.wandb_project, self.logger.wandb_run_id, str(self.rank))):
-            os.makedirs(os.path.join(self.config.save_dir, self.config.wandb_project, self.logger.wandb_run_id, str(self.rank)), exist_ok=True)
+        save_path = os.path.join(self.config.save_dir, 
+                                 self.config.wandb_project, 
+                                 self.config.wandb_run_name if self.config.wandb_run_name else 'unnamed',
+                                 str(self.rank))
+        if not os.path.exists(save_path):
+            os.makedirs(save_path, exist_ok=True)
 
         filename = f"{self.local_step}.pt"
-        torch.save(self.model.state_dict(), os.path.join(self.config.save_dir, self.config.wandb_project, self.logger.wandb_run_id, str(self.rank), filename))
+        torch.save(self.model.state_dict(), os.path.join(save_path, filename))
 
     def _get_batch(self, eval=False):
         if not eval or self.val_data_iter is None:
             try:
                 x, y = next(self.train_data_iter)
-                # if self.first:
-                #     print(f'x {x[:5,:5]}')
-                #     self.first = False
             except StopIteration:
                 self.epoch += 1
                 self.train_data_iter = iter(self.train_dataloader)
@@ -152,12 +153,10 @@ class TrainNode:
         if self.rank == 0:
             # For rank 0, we will calculate the local loss
             this_model = self.model
-            model_name = 'val_local'
 
         if self.rank == 1:
             # For rank 1, we want to calculate the average model loss
             this_model = model_clone
-            model_name = 'val_global'
 
         
         this_model.eval()
@@ -169,14 +168,31 @@ class TrainNode:
                 for _ in range(int(self.config.val_size / self.config.batch_size)):
                     x, y = self._get_batch(eval=True)
                     
-                    # print(x.shape, y.shape)
                     output = this_model(x).transpose(1, 2)
                     loss = self.criterion(output, y)
 
                     loss_total += loss.item()
 
+        # Rank 0 logs the local evaluation.
+        if self.rank == 0:
+            # print(f"LOCAL: Eval Loss: {loss_total / int(self.config.val_size / self.config.batch_size):.4f}, "
+            #         f"Eval Perplexity: {math.exp(loss_total / int(self.config.val_size / self.config.batch_size)):.4f}")
             self.logger.log_pure(loss=loss_total / int(self.config.val_size / self.config.batch_size), 
-                                 name=model_name)
+                                    name='val_local')
+
+        # Broadcast the global loss from rank 1 to all ranks.
+        if self.config.num_nodes > 1:
+            # All ranks create a dummy tensor to participate.
+            global_loss_tensor = torch.empty(1, device=next(self.model.parameters()).device)
+            if self.rank == 1:
+                global_loss_tensor[0] = loss_total / int(self.config.val_size / self.config.batch_size)
+            torch.distributed.broadcast(global_loss_tensor, src=1)
+
+            # Only rank 0 logs the global evaluation.
+            if self.rank == 0:
+                global_loss = global_loss_tensor.item()
+                # print(f"GLOBAL: Eval Loss: {global_loss:.4f}, Eval Perplexity: {math.exp(global_loss):.4f}")
+                self.logger.log_pure(loss=global_loss, name='global')
 
         del model_clone
 
@@ -188,7 +204,8 @@ class TrainNode:
             self._train_step()
 
             self.local_step += 1
-            self.logger.increment_step()
+            if self.rank == 0:
+                self.logger.increment_step()
 
             # if self.local_step == 5:
             #     break

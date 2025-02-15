@@ -22,7 +22,7 @@ def main():
     parser.add_argument(
         "--dataset", type=str, default="shakespeare", help="which dataset to use (shakespeare, wikitext, code, owt)"
     )
-    parser.add_argument("--num_nodes", type=int, default=1)
+    parser.add_argument("--num_nodes", type=int, default=2)
     parser.add_argument("--device_type", type=str, default="cuda")
     parser.add_argument("--devices", type=int, nargs="+", default=None)
     parser.add_argument("--block_size", type=int, default=1024)
