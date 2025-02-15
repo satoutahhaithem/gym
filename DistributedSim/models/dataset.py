@@ -23,7 +23,7 @@ def generate_char_vocab():
     eos_token_id = char_int[eos_token]
     return char_int, int_char, eos_token_id
 
-def get_dataset(dataset, block_size=1024, return_tokenizer=False, char=False):
+def get_dataset(dataset, block_size=1024, char=False):
     """
     Loads and preprocesses the dataset with caching, using either a custom character-level tokenizer
     or the GPT2 tokenizer. The processing pipeline is shared between both cases; the only difference is
@@ -54,31 +54,11 @@ def get_dataset(dataset, block_size=1024, return_tokenizer=False, char=False):
     data_cache_file = os.path.join(cache_dir, f"data_block{block_size}.pt")
 
     # Check for cached data.
-    if char:
-        if os.path.exists(data_cache_file):
-            print(f"Loading cached char-level dataset from {data_cache_file}")
-            cached_data = torch.load(data_cache_file)
-            if return_tokenizer:
-                tokenizer_info = {
-                    "char_int": cached_data["char_int"],
-                    "int_char": cached_data["int_char"],
-                    "eos_token_id": cached_data["eos_token_id"],
-                }
-                return cached_data["train"], cached_data["val"], cached_data["vocab_size"], tokenizer_info
-            else:
-                return cached_data["train"], cached_data["val"], cached_data["vocab_size"]
-    else:
-        tokenizer_cache_dir = os.path.join(cache_dir, "tokenizer")
-        tokenizer_cache_file = os.path.join(tokenizer_cache_dir, "vocab.json")
-        if os.path.exists(data_cache_file) and os.path.exists(tokenizer_cache_file):
-            print(f"Loading cached dataset from {data_cache_file} and tokenizer from {tokenizer_cache_dir}")
-            cached_data = torch.load(data_cache_file)
-            from transformers import GPT2Tokenizer
-            tokenizer_obj = GPT2Tokenizer.from_pretrained(tokenizer_cache_dir)
-            if return_tokenizer:
-                return cached_data["train"], cached_data["val"], cached_data["vocab_size"], tokenizer_obj
-            else:
-                return cached_data["train"], cached_data["val"], cached_data["vocab_size"]
+    if os.path.exists(data_cache_file):
+        print(f"Loading cached char-level dataset from {data_cache_file}")
+
+        cached_data = torch.load(data_cache_file)
+        return cached_data["train"], cached_data["val"], cached_data["vocab_size"]
 
     # Load the raw dataset.
     print(f"Loading dataset: {dataset} {'(char-level)' if char else '(GPT2 tokenization)'}")
@@ -94,60 +74,44 @@ def get_dataset(dataset, block_size=1024, return_tokenizer=False, char=False):
     else:
         raise ValueError(f"Unknown dataset: {dataset}")
 
-    # Initialize the tokenizer and related metadata.
+    # Initialize the tokenizer
     if char:
-        # Use our custom character-based tokenizer.
+        # Use character-based tokenization
         char_int, int_char, eos_token_id = generate_char_vocab()
         vocab_size = len(char_int)
-
+        
         def custom_tokenize(text):
-            return [char_int[c] for c in text]
-
-        tokenizer_info = {
-            "type": "char",
-            "func": custom_tokenize,
-            "eos_token_id": eos_token_id,
-            "char_int": char_int,
-            "int_char": int_char,
-        }
+            if isinstance(text, str):
+                return {"input_ids": [char_int[c] for c in text]}
+            return {"input_ids": [char_int[c] for c in text[text_column]]}
+            
     else:
-        # Use the GPT2 tokenizer.
+        # Use GPT2 tokenizer
         from transformers import GPT2Tokenizer
-        tokenizer_obj = GPT2Tokenizer.from_pretrained("gpt2")
-        if tokenizer_obj.pad_token is None:
-            tokenizer_obj.pad_token = tokenizer_obj.eos_token
-        vocab_size = tokenizer_obj.vocab_size
-        eos_token_id = tokenizer_obj.eos_token_id
-
-        # We wrap the GPT2 tokenizer call in a lambda so that the interface is similar.
-        tokenizer_info = {
-            "type": "gpt2",
-            "func": lambda texts: tokenizer_obj(texts, truncation=True, max_length=args.block_size),
-            "eos_token_id": eos_token_id,
-            "tokenizer_obj": tokenizer_obj,
-        }
-
-    # Define a unified tokenization function.
-    def tokenize_function(examples):
-        if tokenizer_info["type"] == "char":
-            return {"input_ids": [tokenizer_info["func"](text) for text in examples[text_column]]}
-        else:
-            tokenized = tokenizer_info["func"](examples[text_column])
-            return {"input_ids": tokenized["input_ids"]}
+        tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        vocab_size = tokenizer.vocab_size
+        eos_token_id = tokenizer.eos_token_id
+        
+        def custom_tokenize(text):
+            if isinstance(text, str):
+                return tokenizer(text, truncation=True, max_length=block_size)
+            return tokenizer(text[text_column], truncation=True, max_length=block_size)
 
     print("Tokenizing dataset...")
     tokenized_dataset = dataset.map(
-        tokenize_function,
+        custom_tokenize,
         batched=True,
         remove_columns=dataset["train"].column_names
     )
 
-    # Define a function to convert tokenized lists to tensors with fixed block size.
+    # Convert tokenized lists to tensors with fixed block size
     def convert_to_tensor(examples):
         all_ids = []
         for ids in examples["input_ids"]:
             if len(ids) > 0:
-                all_ids.extend(ids + [tokenizer_info["eos_token_id"]])
+                all_ids.extend(ids + [eos_token_id])
         if len(all_ids) == 0:
             return {"input_ids": torch.tensor([])}
         num_blocks = len(all_ids) // block_size
@@ -162,7 +126,7 @@ def get_dataset(dataset, block_size=1024, return_tokenizer=False, char=False):
         convert_to_tensor, batched=True, remove_columns=tokenized_dataset["train"].column_names
     )
 
-    # Build train and validation tensors.
+    # Build train and validation tensors
     train_tensors = [torch.as_tensor(x) for x in tensor_dataset["train"]["input_ids"] if len(x) > 0]
     val_tensors = [torch.as_tensor(x) for x in tensor_dataset["test"]["input_ids"] if len(x) > 0]
     train_data = torch.cat(train_tensors, dim=0) if train_tensors else torch.tensor([])
@@ -170,43 +134,19 @@ def get_dataset(dataset, block_size=1024, return_tokenizer=False, char=False):
 
     print(f"Train data size: {train_data.shape}, Val data size: {val_data.shape}")
 
-    # Cache the processed dataset.
-    if char:
-        cache_data = {
-            "train": train_data,
-            "val": val_data,
-            "vocab_size": vocab_size,
-            "char_int": tokenizer_info["char_int"],
-            "int_char": tokenizer_info["int_char"],
-            "eos_token_id": tokenizer_info["eos_token_id"],
-        }
-        torch.save(cache_data, data_cache_file)
-        print(f"Cached char-level dataset saved to {data_cache_file}")
-    else:
-        torch.save({
-            "train": train_data,
-            "val": val_data,
-            "vocab_size": vocab_size,
-        }, data_cache_file)
-        print(f"Cached dataset saved to {data_cache_file}")
-        # Also cache the GPT2 tokenizer.
-        tokenizer_cache_dir = os.path.join(cache_dir, "tokenizer")
-        os.makedirs(tokenizer_cache_dir, exist_ok=True)
-        tokenizer_info["tokenizer_obj"].save_pretrained(tokenizer_cache_dir)
-        print(f"Cached tokenizer saved to {tokenizer_cache_dir}")
+    # Cache the processed dataset
+    cache_data = {
+        "train": train_data,
+        "val": val_data,
+        "vocab_size": vocab_size,
+    }
+    torch.save(cache_data, data_cache_file)
 
-    if return_tokenizer:
-        if tokenizer_info["type"] == "char":
-            return train_data, val_data, vocab_size, {
-                "char_int": tokenizer_info["char_int"],
-                "int_char": tokenizer_info["int_char"],
-                "eos_token_id": tokenizer_info["eos_token_id"],
-            }
-        else:
-            return train_data, val_data, vocab_size, tokenizer_info["tokenizer_obj"]
-    else:
-        return train_data, val_data, vocab_size
+    return train_data, val_data, vocab_size
 
+
+
+    
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--block_size", type=int, default=1024)
