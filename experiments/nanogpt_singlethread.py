@@ -37,8 +37,7 @@ def main():
     np.random.seed(args.seed)
 
     # Load dataset from HuggingFace
-    # train_data, val_data, args.vocab_size = get_dataset_small(args)
-    train_data, val_data, args.vocab_size = get_dataset(args)
+    train_data, val_data, args.vocab_size = get_dataset(args.dataset, args.block_size, char=True)
     print(f'Vocab size: {args.vocab_size}')
 
     # Create datasets

@@ -61,8 +61,9 @@ def main():
                                     dtype=np.uint16, train=False)
         args.vocab_size = 50304
     else:
-        train_data, val_data, args.vocab_size = get_dataset(args, 
-                                                        char=args.char_dataset)
+        train_data, val_data, args.vocab_size = get_dataset(args.dataset, 
+                                                            block_size=args.block_size, 
+                                                            char=args.char_dataset)
 
         # Create datasets
         train_dataset = GPTTrainDataset(train_data, args.block_size)

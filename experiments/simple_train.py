@@ -100,8 +100,7 @@ def main():
     wandb.init(project="simple-char-train", config=vars(args))
 
     # Load dataset (train_data and val_data are 1D tensors of ints)
-    # train_data, val_data, vocab_size = get_dataset_small(args)
-    train_data, val_data, vocab_size, tokenizer = get_dataset(args, return_tokenizer=True)
+    train_data, val_data, vocab_size, tokenizer = get_dataset(args.dataset, args.block_size, return_tokenizer=True)
     
     # Create datasets and dataloaders
     train_dataset = GPTTrainDataset(train_data, args.block_size)
