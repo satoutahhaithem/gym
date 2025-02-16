@@ -1,12 +1,10 @@
 import torch
-from datasets import load_dataset
 import argparse
 import numpy as np
 import math
 import os
 import torch
-from datasets import load_dataset
-from datasets import Dataset, DatasetDict
+from datasets import load_dataset, Dataset, DatasetDict
 
 def generate_char_vocab():
     """
@@ -69,15 +67,17 @@ def get_dataset(dataset, block_size=1024, char=False):
         train_texts = train_texts[:split_idx]
     elif dataset == "owt":
         # Load the OpenWebText dataset from Hugging Face
-        raw_dataset = load_dataset("Skylion007/openwebtext", trust_remote_code=True)
+        raw_dataset = load_dataset("Skylion007/openwebtext", trust_remote_code=True, split='train[:10%]')
         # The dataset comes with a single split ("train"); extract the text field.
-        all_texts = [item["text"] for item in raw_dataset["train"] if item["text"].strip()]
+        all_texts = raw_dataset["text"]
         # Create train/validation splits (90/10)
         split_idx = int(len(all_texts) * 0.9)
         train_texts = all_texts[:split_idx]
         test_texts = all_texts[split_idx:]
     else:
         raise ValueError(f"Unknown dataset: {dataset}")
+
+    print(len(train_texts), len(test_texts))
 
     # Create standardized dataset format using datasets.Dataset
     standardized_dataset = DatasetDict({
@@ -104,32 +104,35 @@ def get_dataset(dataset, block_size=1024, char=False):
     print("Tokenizing dataset...")
     tokenized_dataset = standardized_dataset.map(
         custom_tokenize,
-        remove_columns=["text"]
+        remove_columns=["text"],
+        batched=True,
+        num_proc=os.cpu_count()
     )
 
     # Convert tokenized lists to tensors with fixed block size
     def convert_to_tensor(examples):
-        all_ids = []
-        for ids in examples["input_ids"]:
-            if len(ids) > 0:
-                all_ids.extend(ids + [eos_token_id])
+        # Flatten all ids and add EOS tokens
+        all_ids = np.concatenate([np.array(ids + [eos_token_id]) for ids in examples["input_ids"] if ids])
         num_blocks = len(all_ids) // block_size
-        if len(all_ids) == 0 or num_blocks == 0:
+        if num_blocks == 0:
             return {"input_ids": torch.tensor([])}
         all_ids = all_ids[: num_blocks * block_size]
-        tensor_data = torch.tensor(all_ids).view(-1, block_size)
+        tensor_data = torch.from_numpy(all_ids.reshape(-1, block_size))
         return {"input_ids": tensor_data}
 
     print("Converting tokenized dataset to tensors...")
     tensor_dataset = tokenized_dataset.map(
-        convert_to_tensor, batched=True, remove_columns=tokenized_dataset["train"].column_names
+        convert_to_tensor,
+        remove_columns=tokenized_dataset["train"].column_names,
+        batched=True,
+        num_proc=os.cpu_count()
     )
 
     # Build train and validation tensors
-    train_tensors = [torch.as_tensor(x) for x in tensor_dataset["train"]["input_ids"] if len(x) > 0]
-    val_tensors = [torch.as_tensor(x) for x in tensor_dataset["test"]["input_ids"] if len(x) > 0]
-    train_data = torch.cat(train_tensors, dim=0) if train_tensors else torch.tensor([])
-    val_data = torch.cat(val_tensors, dim=0) if val_tensors else torch.tensor([])
+    tensor_dataset["train"].set_format("torch", columns=["input_ids"])
+    tensor_dataset["test"].set_format("torch", columns=["input_ids"])
+    train_data = tensor_dataset["train"]["input_ids"].reshape(-1)
+    val_data = tensor_dataset["test"]["input_ids"].reshape(-1)
 
     print(f"Train data size: {train_data.shape}, Val data size: {val_data.shape}")
 
@@ -155,15 +158,8 @@ if __name__ == "__main__":
 
     if args.char:
         # When using character-level tokenization, get the char vocab info.
-        train_data, val_data, vocab_size, tokenizer_info = get_dataset(args.dataset, args.block_size, return_tokenizer=True, char=True)
+        train_data, val_data, vocab_size = get_dataset(args.dataset, args.block_size, char=True)
         print(train_data.shape, val_data.shape, vocab_size)
-        # For example, print a sample slice decoded using the char-level mapping.
-        int_char = tokenizer_info["int_char"]
-        sample_text = ''.join([int_char[x] for x in train_data[10000:10100].cpu().numpy()])
-        print(sample_text)
     else:
-        train_data, val_data, vocab_size, tokenizer = get_dataset(args.dataset, args.block_size, return_tokenizer=True, char=False)
+        train_data, val_data, vocab_size = get_dataset(args.dataset, args.block_size, char=False)
         print(train_data.shape, val_data.shape, vocab_size)
-        # Using GPT2's decode function to print a sample slice.
-        sample_text = tokenizer.decode(train_data[10000:10100].cpu().numpy().tolist())
-        print(sample_text)
