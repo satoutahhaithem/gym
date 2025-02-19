@@ -79,10 +79,14 @@ def get_dataset(dataset, block_size=1024, char=False):
 
     print(len(train_texts), len(test_texts))
 
+    # Concatenate all texts with EOS token between them
+    train_text = "\n".join(train_texts)
+    test_text = "\n".join(test_texts)
+
     # Create standardized dataset format using datasets.Dataset
     standardized_dataset = DatasetDict({
-        "train": Dataset.from_dict({"text": train_texts}),
-        "test": Dataset.from_dict({"text": test_texts})
+        "train": Dataset.from_dict({"text": [train_text]}),
+        "test": Dataset.from_dict({"text": [test_text]})
     })
 
     # Initialize the tokenizer
@@ -102,6 +106,7 @@ def get_dataset(dataset, block_size=1024, char=False):
         custom_tokenize = lambda text: tokenizer(text["text"], truncation=True, max_length=block_size)
 
     print("Tokenizing dataset...")
+    print(standardized_dataset)
     tokenized_dataset = standardized_dataset.map(
         custom_tokenize,
         remove_columns=["text"],
