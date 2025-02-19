@@ -36,7 +36,7 @@ def main():
     parser.add_argument(
         "--model_size", type=str, default="small", choices=["small", "base", "medium", "large", "xl"]
     )
-    parser.add_argument('--char_dataset', action='store_true')
+    # parser.add_argument('--char_dataset', action='store_true')
 
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--learning_rate", type=float, default=0.001)
@@ -58,7 +58,7 @@ def main():
 
     train_data, val_data, args.vocab_size = get_dataset(args.dataset, 
                                                         block_size=args.block_size, 
-                                                        char=args.char_dataset)
+                                                        char=True)
 
     train_dataset = GPTTrainDataset(train_data, args.block_size)
     val_dataset = GPTTrainDataset(val_data, args.block_size)
@@ -81,7 +81,7 @@ def main():
 
         train_dataset=train_dataset,
         val_dataset=val_dataset,
-        dataset_name=f'{args.dataset}_char' if args.char_dataset else args.dataset,
+        dataset_name=f'{args.dataset}_char',
         batch_size=args.batch_size,
         val_size=256,
         save_dir=args.checkpoint_dir,
