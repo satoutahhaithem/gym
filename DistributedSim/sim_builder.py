@@ -7,6 +7,7 @@ from torch.multiprocessing import Queue
 import os
 from tqdm import tqdm
 import pandas as pd
+import datetime
 
 from .sim_config import *
 from .train_node import *
@@ -75,6 +76,65 @@ class LocalSimBuilder(SimBuilder):
             raise ValueError(f"Invalid device type: {self.config.device}")
 
         print(f"Rank {self.rank} using device {self.device}")
+
+class DistributedSimBuilder(SimBuilder):
+    """
+    DistributedSimBuilder sets up distributed training over multiple physical machines,
+    including those with MPS devices. In this design, one node (typically the one with rank 0)
+    is designated as the master. All nodes (launched separately) must have their connection
+    parameters (MASTER_ADDR, MASTER_PORT, RANK/node_rank, and WORLD_SIZE/num_nodes) provided
+    via environment variables or through attributes on the SimConfig.
+
+    To manage asynchronous startups (which may take around a minute per node), we set a generous 
+    timeout in the init_process_group call and then enforce a barrier so that no training starts until 
+    all nodes have connected.
+    """
+
+    def _build_connection(self):
+        # Use environment variables if available; otherwise, fall back to config defaults.
+        master_addr = os.environ.get("MASTER_ADDR", getattr(self.config, "master_addr", "localhost"))
+        master_port = os.environ.get("MASTER_PORT", str(getattr(self.config, "master_port", 29500)))
+        os.environ["MASTER_ADDR"] = master_addr
+        os.environ["MASTER_PORT"] = master_port
+
+        # Get rank and world size from environment or from the config.
+        rank = int(os.environ.get("RANK", getattr(self.config, "node_rank", 0)))
+        world_size = int(os.environ.get("WORLD_SIZE", self.config.num_nodes))
+
+        # Use a generous timeout to allow slower nodes to connect.
+        timeout = getattr(self.config, "timeout", datetime.timedelta(minutes=5))
+
+        # For MPS (and CPU) devices, the gloo backend is supported.
+        dist.init_process_group(
+            backend="gloo",
+            rank=rank,
+            world_size=world_size,
+            timeout=timeout
+        )
+
+        # Set the right device.
+        if self.config.device_type == "mps":
+            self.device = torch.device("mps")
+        else:
+            self.device = torch.device(self.config.device)
+
+        print(f"Node {rank}/{world_size} connected at {master_addr}:{master_port} using device {self.device}")
+
+        # Use a barrier to make sure that all nodes are connected before training starts.
+        dist.barrier()
+
+    def execute(self):
+        """
+        In a physical distributed setting each node runs independently. So instead of spawning
+        multiple processes, we simply initialize the connection on the current node, create the TrainNode,
+        and run training.
+        """
+        rank = int(os.environ.get("RANK", getattr(self.config, "node_rank", 0)))
+        self.rank = rank
+        self._build_connection()
+        sim = TrainNode(self.config, self.device, self.rank)
+        sim.train()
+        self._process_cleanup()
 
 class SingleSimBuilder(SimBuilder):
     def _build_connection(self):

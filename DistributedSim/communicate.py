@@ -1,7 +1,11 @@
 import torch.distributed as dist
+import inspect
+import datetime
 
 def mps_compatible(func):
     def wrapper(tensor, *args, **kwargs):
+        prev_call = inspect.stack()[1]
+        print(f'{datetime.datetime.now()} calling function {func.__name__} from location {prev_call.filename}:{prev_call.lineno} {prev_call.function}')
         if tensor.device.type == 'mps':
             tmp = tensor.data.to('cpu')
             # Call the function on CPU
