@@ -160,9 +160,10 @@ class TrainNode:
             this_model = model_clone
 
         
-        this_model.eval()
 
         if self.rank == 0 or self.rank == 1:
+            this_model.eval()
+            
             loss_total = 0
 
             with torch.no_grad():
