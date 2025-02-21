@@ -130,13 +130,19 @@ class TrainNode:
 
     def _train_step(self):
         x, y = self._get_batch()
-
         self.gradient_strategy.zero_grad()
+        
+        minibatch_size = self.config.local_minibatch_size if self.config.local_minibatch_size else self.config.batch_size
 
-        output = self.model(x).transpose(1, 2)
+        for i in range(0, len(x), minibatch_size):
+            x_batch = x[i:i+minibatch_size]
+            y_batch = y[i:i+minibatch_size]
 
-        loss = self.criterion(output, y)
-        loss.backward()
+            output = self.model(x_batch).transpose(1, 2)
+
+            loss = self.criterion(output, y_batch)
+            loss.backward()
+        
         self.gradient_strategy.step()
 
         if self.rank == 0:

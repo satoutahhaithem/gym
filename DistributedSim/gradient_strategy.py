@@ -233,6 +233,9 @@ class DiLoCoGradient(GradientStrategy):
             param.data = self.model.state_dict()[name].data.to("cpu")
 
     def step(self):
+        if self.gradient_config.max_norm:
+            nn_utils.clip_grad_norm_(self.model.parameters(), max_norm=self.gradient_config.max_norm)
+
         # We have just calculated the loss and done the backward pass. 
         # Therefore we do inner step first.
         self.optim.step()

@@ -18,6 +18,7 @@ def main():
 
     parser.add_argument("--diloco_interval", type=int, default=100)
     parser.add_argument("--device_type", type=str, default="mps")
+    parser.add_argument("--local_minibatch_size", type=int, default=4)
 
     args = parser.parse_args()
 

@@ -35,6 +35,7 @@ def arg_parse():
     )
 
     parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--local_minibatch_size", type=int, default=None)
     parser.add_argument("--learning_rate", type=float, default=0.001)
     parser.add_argument("--max_norm", type=float, default=1.0)
     parser.add_argument("--warmup_steps", type=int, default=1000)
@@ -72,12 +73,12 @@ def config_gen(args, train_dataset, val_dataset, gpt_config):
         num_nodes=args.num_nodes,
         device_type=args.device_type,
         devices=args.devices,
-
         
         train_dataset=train_dataset,
         val_dataset=val_dataset,
         dataset_name=f'{args.dataset}_char' if args.char_dataset else args.dataset,
         batch_size=args.batch_size,
+        local_minibatch_size=args.local_minibatch_size,
         block_size=args.block_size,
         val_size=256,
         save_dir=args.checkpoint_dir,
