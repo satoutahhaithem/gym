@@ -5,3 +5,4 @@ wandb/
 checkpoints/
 DistributedSim.egg-info/
 cache/
+remote/
