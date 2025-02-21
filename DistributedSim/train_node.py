@@ -18,7 +18,7 @@ from tqdm import tqdm
 from torch.profiler import profile, record_function, ProfilerActivity
 
 from .timer import Timer
-from .models.dataset import get_dataset, GPTTrainDataset
+from .models.dataset import get_dataset
 
 class TrainNode:
     '''
