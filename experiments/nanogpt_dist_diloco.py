@@ -24,7 +24,7 @@ def main():
     train_data, val_data, args.vocab_size = get_dataset(args.dataset, 
                                                         block_size=args.block_size, 
                                                         char=args.char_dataset,
-                                                        rank=os.environ.get('RANK', None),
+                                                        rank=int(os.environ.get('RANK', None)),
                                                         world_size=args.num_nodes)
 
     train_dataset = GPTTrainDataset(train_data, args.block_size)
