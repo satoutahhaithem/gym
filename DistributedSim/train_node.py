@@ -177,9 +177,14 @@ class TrainNode:
             with torch.no_grad():
                 for _ in range(int(self.config.val_size / self.config.batch_size)):
                     x, y = self._get_batch(eval=True)
-                    
-                    output = this_model(x).transpose(1, 2)
-                    loss = self.criterion(output, y)
+
+                    minibatch_size = self.config.local_minibatch_size if self.config.local_minibatch_size else self.config.batch_size
+                    for i in range(0, len(x), minibatch_size):
+                        x_batch = x[i:i+minibatch_size]
+                        y_batch = y[i:i+minibatch_size]
+
+                        output = this_model(x_batch).transpose(1, 2)
+                        loss = self.criterion(output, y_batch)
 
                     loss_total += loss.item()
 
