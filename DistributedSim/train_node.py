@@ -18,6 +18,7 @@ from tqdm import tqdm
 from torch.profiler import profile, record_function, ProfilerActivity
 
 from .timer import Timer
+from .models.dataset import get_dataset, GPTTrainDataset
 
 class TrainNode:
     '''
@@ -28,18 +29,31 @@ class TrainNode:
                  device: torch.device,
                  rank: int):
         self.config = config
-
         self.device = device
         self.rank = rank
 
         torch.manual_seed(self.config.seed)
         torch.cuda.manual_seed(self.config.seed)
+        
+        # Load only this node's data shard
+        train_data, val_data, vocab_size = get_dataset(
+            self.config.dataset_name,
+            block_size=self.config.block_size,
+            char=self.config.char_dataset,
+            rank=rank,
+            world_size=self.config.num_nodes
+        )
+        
+        # Create datasets with only the relevant shard
+        self.config.train_dataset = GPTTrainDataset(train_data, self.config.block_size)
+        self.config.val_dataset = GPTTrainDataset(val_data, self.config.block_size)
+        
         self.model = self.config.model_class(self.config.gpt_config).to(self.device)
         
-        for name, param in self.model.named_parameters():
-            if len(param.shape) == 2:
-                print(f'rank {self.rank} {name} {param[:5,:5]}')
-                break
+        # for name, param in self.model.named_parameters():
+        #     if len(param.shape) == 2:
+        #         print(f'rank {self.rank} {name} {param[:5,:5]}')
+        #         break
         
         ## Ensure all process models share the same params
         if self.config.num_nodes > 1:
@@ -84,7 +98,7 @@ class TrainNode:
             num_replicas=self.config.num_nodes, 
             rank=self.rank, 
             shuffle=True,
-            # seed=self.config.seed,
+            seed=self.config.seed,
             drop_last=True
         )
 

@@ -17,6 +17,7 @@ def main():
     parser = arg_parse()
 
     parser.add_argument("--diloco_interval", type=int, default=100)
+    parser.add_argument("--device_type", type=str, default="mps")
 
     args = parser.parse_args()
 

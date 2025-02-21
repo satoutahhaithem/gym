@@ -21,28 +21,30 @@ def generate_char_vocab():
     eos_token_id = char_int[eos_token]
     return char_int, eos_token_id
 
-def get_dataset(dataset, block_size=1024, char=False):
+def get_dataset(dataset, block_size=1024, char=False, rank=None, world_size=None):
     """
     Loads and preprocesses the dataset with caching, using either a custom character-level tokenizer
-    or the GPT2 tokenizer.
+    or the GPT2 tokenizer. If rank and world_size are provided, only loads the relevant shard.
     
     Args:
         dataset: a string identifier ("shakespeare", "wikitext", "code", or "owt")
         block_size: the sequence block size.
         char (bool): If True, use character-level tokenization; otherwise, use GPT-2 tokenization.
-    
-    Returns:
-        (train_data, val_data, vocab_size)
+        rank (int, optional): The rank of the current process
+        world_size (int, optional): Total number of processes
     """
-    # Decide cache locations based on tokenization mode.
+    # Decide cache locations based on tokenization mode and rank
     if char:
         cache_dir = os.path.join("cache", f"{dataset}_char")
     else:
         cache_dir = os.path.join("cache", dataset)
     os.makedirs(cache_dir, exist_ok=True)
-    data_cache_file = os.path.join(cache_dir, f"data_block{block_size}.pt")
+    
+    # Add rank to cache file name if distributed
+    rank_suffix = f"_rank{rank}_of{world_size}" if rank is not None else ""
+    data_cache_file = os.path.join(cache_dir, f"data_block{block_size}_{rank_suffix}.pt")
 
-    # Check for cached data.
+    # Check for cached data
     if os.path.exists(data_cache_file):
         print(f"Loading cached dataset from {data_cache_file}")
         cached_data = torch.load(data_cache_file)
@@ -141,7 +143,25 @@ def get_dataset(dataset, block_size=1024, char=False):
 
     print(f"Train data size: {train_data.shape}, Val data size: {val_data.shape}")
 
-    # Cache the processed dataset
+    # If rank is provided, only keep the relevant shard of the data
+    if rank is not None and world_size is not None:
+        # Calculate shard size and indices
+        train_size = len(train_data)
+        shard_size = train_size // world_size
+        start_idx = rank * shard_size
+        end_idx = start_idx + shard_size if rank < world_size - 1 else train_size
+        
+        # Only keep the relevant shard
+        train_data = train_data[start_idx:end_idx]
+        
+        # For validation, we can either shard it or keep a small subset for each rank
+        val_size = len(val_data)
+        val_shard_size = val_size // world_size
+        val_start_idx = rank * val_shard_size
+        val_end_idx = val_start_idx + val_shard_size if rank < world_size - 1 else val_size
+        val_data = val_data[val_start_idx:val_end_idx]
+
+    # Cache the processed dataset shard
     cache_data = {
         "train": train_data,
         "val": val_data,
