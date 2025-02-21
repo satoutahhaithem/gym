@@ -15,28 +15,24 @@ def gen_wandb_name(args):
     name = f"bs{args.batch_size}_lr{args.learning_rate:.0e}_warm{args.warmup_steps}_max{args.max_steps}"
     return name
 
-def main():
+def arg_parse():
     # Command line arguments
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--dataset", type=str, default="shakespeare", help="which dataset to use (shakespeare, wikitext, code, owt)"
+        "--dataset", type=str, default="shakespeare", 
+        help="which dataset to use (shakespeare, wikitext, code, owt)"
     )
+    parser.add_argument('--char_dataset', action='store_true')
+    parser.add_argument("--block_size", type=int, default=1024)
+
     parser.add_argument("--num_nodes", type=int, default=1)
     parser.add_argument("--device_type", type=str, default="cuda")
     parser.add_argument("--devices", type=int, nargs="+", default=None)
-    parser.add_argument("--block_size", type=int, default=1024)
     parser.add_argument("--epochs", type=int, default=1)
-    parser.add_argument("--checkpoint_dir", type=str, default="checkpoints")
-    parser.add_argument("--checkpoint_interval", type=int, default=None)
-    parser.add_argument("--seed", type=int, default=1337)
-    parser.add_argument("--eval_interval", type=int, default=100)
-    parser.add_argument("--wandb_project", type=str, default="nanogpt_small")
-    parser.add_argument("--wandb_name", type=str, default=None)
     parser.add_argument(
         "--model_size", type=str, default="small", choices=["small", "base", "medium", "large", "xl"]
     )
-    parser.add_argument('--char_dataset', action='store_true')
 
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--learning_rate", type=float, default=0.001)
@@ -45,8 +41,16 @@ def main():
     parser.add_argument("--max_steps", type=int, default=10000)
     parser.add_argument("--cosine_anneal", action='store_true')
 
-    args = parser.parse_args()
+    parser.add_argument("--checkpoint_dir", type=str, default="checkpoints")
+    parser.add_argument("--checkpoint_interval", type=int, default=None)
+    parser.add_argument("--seed", type=int, default=1337)
+    parser.add_argument("--eval_interval", type=int, default=100)
+    parser.add_argument("--wandb_project", type=str, default="nanogpt_small")
+    parser.add_argument("--wandb_name", type=str, default=None)
 
+    return parser
+
+def gen_data(args):
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -66,6 +70,9 @@ def main():
     gpt_config = GPTConfig.gpt2_size_map(args.model_size)
     gpt_config.vocab_size = args.vocab_size
 
+    return train_dataset, val_dataset, gpt_config
+
+def config_gen(args, train_dataset, val_dataset, gpt_config):
     config = SimConfig(
         model_class=GPT,
         gpt_config=gpt_config,
@@ -84,9 +91,9 @@ def main():
         eval_interval=args.eval_interval,
 
         criterion_class=torch.nn.CrossEntropyLoss,
-        gradient_class=SimpleReduceGradient,
+        # gradient_class=,
         gradient_config=GradientConfig(
-            optimizer_class=torch.optim.Adam,
+            optimizer_class=torch.optim.AdamW,
             optimizer_kwargs={
                 'lr': args.learning_rate,
             },
@@ -102,11 +109,4 @@ def main():
         wandb_run_name=args.wandb_name if args.wandb_name else gen_wandb_name(args),
     )
 
-
-    simbuilder = LocalSimBuilder(config)
-
-    simbuilder.execute()
-
-
-if __name__ == "__main__":
-    main()
+    return config
