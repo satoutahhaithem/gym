@@ -225,5 +225,7 @@ class TrainNode:
             # if self.local_step == 5:
             #     break
 
+            dist.barrier()
+
 
         self._evaluate()
