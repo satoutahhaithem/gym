@@ -17,7 +17,7 @@ def gen_wandb_name(args):
 
 def arg_parse():
     # Command line arguments
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(conflict_handler='resolve')
 
     parser.add_argument(
         "--dataset", type=str, default="shakespeare", 
@@ -50,7 +50,7 @@ def arg_parse():
 
     return parser
 
-def gen_data(args):
+def gen_gpt_config(args):
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -58,19 +58,10 @@ def gen_data(args):
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
 
-    train_data, val_data, args.vocab_size = get_dataset(args.dataset, 
-                                                        block_size=args.block_size, 
-                                                        char=args.char_dataset)
-
-    train_dataset = GPTTrainDataset(train_data, args.block_size)
-    val_dataset = GPTTrainDataset(val_data, args.block_size)
-    
-    print(f'Vocab size: {args.vocab_size}')
-
     gpt_config = GPTConfig.gpt2_size_map(args.model_size)
     gpt_config.vocab_size = args.vocab_size
 
-    return train_dataset, val_dataset, gpt_config
+    return gpt_config
 
 def config_gen(args, train_dataset, val_dataset, gpt_config):
     config = SimConfig(
@@ -80,11 +71,14 @@ def config_gen(args, train_dataset, val_dataset, gpt_config):
         num_epochs=args.epochs,
         num_nodes=args.num_nodes,
         device_type=args.device_type,
+        devices=args.devices,
 
+        
         train_dataset=train_dataset,
         val_dataset=val_dataset,
         dataset_name=f'{args.dataset}_char' if args.char_dataset else args.dataset,
         batch_size=args.batch_size,
+        block_size=args.block_size,
         val_size=256,
         save_dir=args.checkpoint_dir,
         checkpoint_interval=args.checkpoint_interval,
