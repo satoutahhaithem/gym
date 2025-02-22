@@ -145,7 +145,7 @@ class TrainNode:
 
         for name, param in self.model.named_parameters():
             if param.requires_grad:
-                param.grad /= minibatch_size
+                param.grad /= (len(x) / minibatch_size)
         
         self.gradient_strategy.step()
 
