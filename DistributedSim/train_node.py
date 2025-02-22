@@ -142,6 +142,10 @@ class TrainNode:
 
             loss = self.criterion(output, y_batch)
             loss.backward()
+
+        for name, param in self.model.named_parameters():
+            if param.requires_grad:
+                param.grad /= minibatch_size
         
         self.gradient_strategy.step()
 
