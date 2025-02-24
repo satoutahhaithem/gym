@@ -46,7 +46,7 @@ def arg_parse():
     parser.add_argument("--checkpoint_interval", type=int, default=None)
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--eval_interval", type=int, default=100)
-    parser.add_argument("--wandb_project", type=str, default="nanogpt_small")
+    parser.add_argument("--wandb_project", type=str, default=None)
     parser.add_argument("--wandb_name", type=str, default=None)
 
     return parser

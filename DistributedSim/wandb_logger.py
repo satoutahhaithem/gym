@@ -18,46 +18,49 @@ class WandbLogger:
 
         self.pbar = tqdm(total=max_steps)
 
-        # Prepare the wandb config
-        wandb_config = self.config.__dict__.copy()
-        wandb_config.update({
-            "architecture": "GPT",
-            "model_parameters": model.get_num_params() / 1e6,
-            "dataset": self.config.dataset_name,
-        })
+        if self.config.wandb_project is not None:
+            # Prepare the wandb config
+            wandb_config = self.config.__dict__.copy()
+            wandb_config.update({
+                "architecture": "GPT",
+                "model_parameters": model.get_num_params() / 1e6,
+                "dataset": self.config.dataset_name,
+            })
 
-        print("MODEL PARAMS: ", model.get_num_params() / 1e6)
+            print("MODEL PARAMS: ", model.get_num_params() / 1e6)
 
-        # Remove unnecessary keys
-        keys_to_remove = ['model_class', 'gpt_config', 'train_dataset', 'val_dataset']
-        for key in keys_to_remove:
-            if key in wandb_config:
-                del wandb_config[key]
+            # Remove unnecessary keys
+            keys_to_remove = ['model_class', 'gpt_config', 'train_dataset', 'val_dataset']
+            for key in keys_to_remove:
+                if key in wandb_config:
+                    del wandb_config[key]
 
-        wandb_config['gradient_config'] = self.config.gradient_config.__dict__
+            wandb_config['gradient_config'] = self.config.gradient_config.__dict__
 
-        wandb.init(project=self.config.wandb_project,
-                   name=self.config.wandb_run_name, 
-                   config=wandb_config)
-        self.wandb_run_id = wandb.run.name
+            wandb.init(project=self.config.wandb_project,
+                    name=self.config.wandb_run_name, 
+                    config=wandb_config)
+            self.wandb_run_id = wandb.run.name
 
-        self.current_lr = (self.config.gradient_config.optimizer_kwargs.get('lr', 0.0)
-                           if self.config.gradient_config.optimizer_kwargs else 0.0)
+            self.current_lr = (self.config.gradient_config.optimizer_kwargs.get('lr', 0.0)
+                            if self.config.gradient_config.optimizer_kwargs else 0.0)
 
     def log_pure(self, loss: float, name: str):
-        data = {
-            f"{name}_loss": loss,
-            f"{name}_perplexity": float(np.exp(loss))
-        }
-        wandb.log(data, step=self.step)
+        if hasattr(self, 'wandb_run_id'):
+            data = {
+                f"{name}_loss": loss,
+                f"{name}_perplexity": float(np.exp(loss))
+            }
+            wandb.log(data, step=self.step)
 
     def log_train(self, loss: float):
-        data = {
-            "train_loss": loss,
-            "train_perplexity": float(np.exp(loss)),
-            "lr": self.current_lr
-        }
-        wandb.log(data, step=self.step)
+        if hasattr(self, 'wandb_run_id'):
+            data = {
+                "train_loss": loss,
+                "train_perplexity": float(np.exp(loss)),
+                "lr": self.current_lr
+            }
+            wandb.log(data, step=self.step)
 
         self.pbar.update(1)
         self.pbar.set_postfix({
