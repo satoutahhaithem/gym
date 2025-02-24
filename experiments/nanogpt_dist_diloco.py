@@ -19,6 +19,7 @@ def main():
     parser.add_argument("--diloco_interval", type=int, default=100)
     parser.add_argument("--device_type", type=str, default="mps")
     parser.add_argument("--local_minibatch_size", type=int, default=4)
+    parser.add_argument("--outer_lr", type=float, default=0.7)
 
     args = parser.parse_args()
 
@@ -39,7 +40,7 @@ def main():
     config.gradient_config.diloco_interval = args.diloco_interval
     config.gradient_config.outer_optimizer_cls = torch.optim.SGD
     config.gradient_config.outer_optimizer_kwargs = {
-        'lr': 0.7,
+        'lr': args.outer_lr,
         'nesterov': True,
         'momentum': 0.9,
     }
