@@ -37,6 +37,9 @@ class TrainNode:
         torch.cuda.manual_seed(self.config.seed)
         
         self.model = self.config.model_class(self.config.gpt_config).to(self.device)
+    
+        print(f"model parameter count: ", self.model.get_num_params() / 1e6)
+
         
         # for name, param in self.model.named_parameters():
         #     if len(param.shape) == 2:
