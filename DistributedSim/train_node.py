@@ -138,9 +138,14 @@ class TrainNode:
             x_batch = x[i:i+minibatch_size]
             y_batch = y[i:i+minibatch_size]
 
-            output = self.model(x_batch).transpose(1, 2)
+            if self.config.device_type == 'cpu':
+                output = self.model(x_batch).transpose(1, 2)
+                loss = self.criterion(output, y_batch)
+            else:
+                with torch.autocast(device_type=self.config.device_type, dtype=torch.float16):
+                    output = self.model(x_batch).transpose(1, 2)
+                    loss = self.criterion(output, y_batch)
 
-            loss = self.criterion(output, y_batch)
             loss.backward()
 
         for name, param in self.model.named_parameters():
