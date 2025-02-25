@@ -21,16 +21,10 @@ def main():
 
     args = parser.parse_args()
 
-    train_data, val_data, args.vocab_size = get_dataset(args.dataset, 
-                                                        block_size=args.block_size, 
-                                                        char=args.char_dataset)
-
-    train_dataset = GPTTrainDataset(train_data, args.block_size)
-    val_dataset = GPTTrainDataset(val_data, args.block_size)
 
     gpt_config = gen_gpt_config(args)
 
-    config = config_gen(args, train_dataset, val_dataset, gpt_config)
+    config = config_gen(args, gpt_config)
 
     config.gradient_class = DiLoCoGradient
     config.gradient_config.diloco_interval = args.diloco_interval
