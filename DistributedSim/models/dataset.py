@@ -157,6 +157,7 @@ def get_dataset(dataset, block_size=1024, char=False, rank=None, world_size=None
         train_data = train_data[start_idx:end_idx]
         
         # For validation, we can either shard it or keep a small subset for each rank
+        # TODO: Don't shard the validation set.
         val_size = len(val_data)
         val_shard_size = val_size // world_size
         val_start_idx = rank * val_shard_size
