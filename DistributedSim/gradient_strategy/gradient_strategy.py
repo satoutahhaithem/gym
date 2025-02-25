@@ -1,17 +1,13 @@
 import torch
 import torch.distributed as dist
-from torch.distributed import init_process_group, destroy_process_group
 
 from torch.optim.lr_scheduler import LambdaLR
 
-from typing import Optional, Callable, Type
-import os
-from abc import ABC, abstractmethod
+from typing import Type
 import math
 
 import torch.nn.utils as nn_utils
 
-from copy import deepcopy
 from .communicate import *
 
 class GradientConfig:

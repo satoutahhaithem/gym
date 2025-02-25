@@ -7,10 +7,9 @@ from torch import nn
 from .sim_config import *
 
 class WandbLogger:
-    def __init__(self, rank: int, device: torch.device, config: SimConfig, model: nn.Module, max_steps: int, project: str):
+    def __init__(self, rank: int, device: torch.device, config: SimConfig, model: nn.Module, max_steps: int):
         self.device = device
         self.config = config
-        self.project = project
         self.rank = rank
         self.step = 0
 
@@ -27,7 +26,6 @@ class WandbLogger:
                 "dataset": self.config.dataset_name,
             })
 
-
             # Remove unnecessary keys
             keys_to_remove = ['model_class', 'gpt_config', 'train_dataset', 'val_dataset']
             for key in keys_to_remove:
@@ -37,15 +35,15 @@ class WandbLogger:
             wandb_config['gradient_config'] = self.config.gradient_config.__dict__
 
             wandb.init(project=self.config.wandb_project,
-                    name=self.config.wandb_run_name, 
+                    name=self.config.wandb_name, 
                     config=wandb_config)
-            self.wandb_run_id = wandb.run.name
+            self.wandb_name = wandb.run.name
 
             self.current_lr = (self.config.gradient_config.optimizer_kwargs.get('lr', 0.0)
                             if self.config.gradient_config.optimizer_kwargs else 0.0)
 
     def log_pure(self, loss: float, name: str):
-        if hasattr(self, 'wandb_run_id'):
+        if hasattr(self, 'wandb_name'):
             data = {
                 f"{name}_loss": loss,
                 f"{name}_perplexity": float(np.exp(loss))
@@ -53,7 +51,7 @@ class WandbLogger:
             wandb.log(data, step=self.step)
 
     def log_train(self, loss: float):
-        if hasattr(self, 'wandb_run_id'):
+        if hasattr(self, 'wandb_name'):
             data = {
                 "train_loss": loss,
                 "train_perplexity": float(np.exp(loss)),
@@ -72,9 +70,3 @@ class WandbLogger:
 
     def log_lr(self, lr: float):
         self.current_lr = lr
-
-    def log_dict(self, log_dict: dict):
-        """
-        Log an arbitrary dictionary of metrics.
-        """
-        self._distributed_log(log_dict)

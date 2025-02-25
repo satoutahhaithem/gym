@@ -98,7 +98,7 @@ def config_gen(args, gpt_config):
 
         seed=args.seed,
         wandb_project=args.wandb_project,
-        wandb_run_name=args.wandb_name if args.wandb_name else gen_wandb_name(args),
+        wandb_name=args.wandb_name if args.wandb_name else gen_wandb_name(args),
     )
 
     return config

@@ -1,10 +1,7 @@
 import torch
 import torch.distributed as dist
-from torch.distributed import init_process_group, destroy_process_group
-from torch.utils.data import DataLoader, DistributedSampler
-import torch.nn.functional as F
+from torch.utils.data import DataLoader
 
-from typing import Optional, Callable, Type
 import os
 import copy
 
@@ -12,10 +9,6 @@ from .sim_config import *
 from .gradient_strategy.gradient_strategy import *
 from .wandb_logger import *
 from .gradient_strategy.communicate import *
-
-from tqdm import tqdm
-
-from torch.profiler import profile, record_function, ProfilerActivity
 
 from .models.dataset import get_dataset
 from .models.nanogpt import GPTTrainDataset
@@ -64,8 +57,7 @@ class TrainNode:
                                       device=self.device, 
                                       config=self.config, 
                                       model=self.model, 
-                                      max_steps=self.max_steps, 
-                                      project=self.config.wandb_project)
+                                      max_steps=self.max_steps)
 
         self.gradient_strategy = self.config.gradient_class(self.rank, 
                                                             self.model, 
