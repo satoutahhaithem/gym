@@ -60,11 +60,6 @@ class TrainNode:
             if not hasattr(self.config.gradient_config, 'max_local_steps'):
                 self.config.gradient_config.max_local_steps = self.max_steps
 
-        self.gradient_strategy = self.config.gradient_class(self.rank, 
-                                                            self.model, 
-                                                            self.config,
-                                                            self.logger if self.rank == 0 else None)
-
         if self.rank == 0:
             self.logger = WandbLogger(rank=self.rank, 
                                       device=self.device, 
@@ -73,13 +68,18 @@ class TrainNode:
                                       max_steps=self.max_steps, 
                                       project=self.config.wandb_project)
 
+        self.gradient_strategy = self.config.gradient_class(self.rank, 
+                                                            self.model, 
+                                                            self.config,
+                                                            self.logger if self.rank == 0 else None)
+
         self.epoch = 0
         
     
     def get_datasets(self):
         ## Import Datasets
 
-        train_data, val_data, self.vocab_size = get_dataset(self.config.dataset, 
+        train_data, val_data, self.vocab_size = get_dataset(self.config.dataset_name.split('_')[0], 
                                                         block_size=self.config.block_size, 
                                                         rank=self.rank,
                                                         world_size=self.config.num_nodes,

@@ -60,7 +60,6 @@ def gen_gpt_config(args):
     torch.backends.cudnn.allow_tf32 = True
 
     gpt_config = GPTConfig.gpt2_size_map(args.model_size)
-    gpt_config.vocab_size = args.vocab_size
 
     return gpt_config
 
@@ -77,6 +76,7 @@ def config_gen(args, gpt_config):
         # train_dataset=train_dataset,
         # val_dataset=val_dataset,
         dataset_name=f'{args.dataset}_char' if args.char_dataset else args.dataset,
+        char_dataset=args.char_dataset,
         batch_size=args.batch_size,
         local_minibatch_size=args.local_minibatch_size,
         block_size=args.block_size,
