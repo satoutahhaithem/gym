@@ -64,7 +64,7 @@ def gen_gpt_config(args):
 
     return gpt_config
 
-def config_gen(args, train_dataset, val_dataset, gpt_config):
+def config_gen(args, gpt_config):
     config = SimConfig(
         model_class=GPT,
         gpt_config=gpt_config,
@@ -74,8 +74,8 @@ def config_gen(args, train_dataset, val_dataset, gpt_config):
         device_type=args.device_type,
         devices=args.devices,
         
-        train_dataset=train_dataset,
-        val_dataset=val_dataset,
+        # train_dataset=train_dataset,
+        # val_dataset=val_dataset,
         dataset_name=f'{args.dataset}_char' if args.char_dataset else args.dataset,
         batch_size=args.batch_size,
         local_minibatch_size=args.local_minibatch_size,

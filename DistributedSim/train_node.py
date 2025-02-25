@@ -35,23 +35,19 @@ class TrainNode:
 
         torch.manual_seed(self.config.seed)
         torch.cuda.manual_seed(self.config.seed)
+
+        self.get_datasets()
+
+        self.config.gpt_config.vocab_size = self.vocab_size
         
         self.model = self.config.model_class(self.config.gpt_config).to(self.device)
     
         print(f"model parameter count: ", self.model.get_num_params() / 1e6)
 
-        
-        # for name, param in self.model.named_parameters():
-        #     if len(param.shape) == 2:
-        #         print(f'rank {self.rank} {name} {param[:5,:5]}')
-        #         break
-        
         ## Ensure all process models share the same params
         if self.config.num_nodes > 1:
             for _, param in self.model.named_parameters():
                 broadcast(param.data, src=0)
-
-        self.build_dataloaders()
 
         self.criterion = self.config.criterion_class(**self.config.criterion_kwargs)
 
@@ -64,6 +60,11 @@ class TrainNode:
             if not hasattr(self.config.gradient_config, 'max_local_steps'):
                 self.config.gradient_config.max_local_steps = self.max_steps
 
+        self.gradient_strategy = self.config.gradient_class(self.rank, 
+                                                            self.model, 
+                                                            self.config,
+                                                            self.logger if self.rank == 0 else None)
+
         if self.rank == 0:
             self.logger = WandbLogger(rank=self.rank, 
                                       device=self.device, 
@@ -72,34 +73,33 @@ class TrainNode:
                                       max_steps=self.max_steps, 
                                       project=self.config.wandb_project)
 
-        self.gradient_strategy = self.config.gradient_class(self.rank, 
-                                                            self.model, 
-                                                            self.config,
-                                                            self.logger if self.rank == 0 else None)
-
-        self.train_data_iter = iter(self.train_dataloader)
-        self.val_data_iter = iter(self.val_dataloader)
-
         self.epoch = 0
         
     
-    def build_dataloaders(self):
-        sampler = DistributedSampler(
-            self.config.train_dataset, 
-            num_replicas=self.config.num_nodes, 
-            rank=self.rank, 
-            shuffle=True,
-            seed=self.config.seed,
-            drop_last=True
-        )
+    def get_datasets(self):
+        ## Import Datasets
 
-        self.train_dataloader = DataLoader(self.config.train_dataset, 
-                          batch_size=self.config.batch_size,
-                          sampler=sampler)
+        train_data, val_data, self.vocab_size = get_dataset(self.config.dataset, 
+                                                        block_size=self.config.block_size, 
+                                                        rank=self.rank,
+                                                        world_size=self.config.num_nodes,
+                                                        char=self.config.char_dataset)
 
-        self.val_dataloader = DataLoader(self.config.val_dataset, 
+        self.train_dataset = GPTTrainDataset(train_data, self.config.block_size)
+        self.val_dataset = GPTTrainDataset(val_data, self.config.block_size)
+
+        ## Build Dataloaders
+
+        self.train_dataloader = DataLoader(self.train_dataset, 
                           batch_size=self.config.batch_size,
                           shuffle=True)
+
+        self.val_dataloader = DataLoader(self.val_dataset, 
+                          batch_size=self.config.batch_size,
+                          shuffle=True)
+
+        self.train_data_iter = iter(self.train_dataloader)
+        self.val_data_iter = iter(self.val_dataloader)
 
     def _save_checkpoint(self):
         save_path = os.path.join(self.config.save_dir, 
@@ -197,7 +197,7 @@ class TrainNode:
 
                         output = this_model(x_batch).transpose(1, 2)
                         loss = self.criterion(output, y_batch)
-                        
+
                         if self.config.device_type == 'cpu':
                             output = self.model(x_batch).transpose(1, 2)
                             loss = self.criterion(output, y_batch)

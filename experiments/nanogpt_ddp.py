@@ -26,7 +26,7 @@ def main():
 
     gpt_config = gen_gpt_config(args)
 
-    config = config_gen(args, train_dataset, val_dataset, gpt_config)
+    config = config_gen(args, gpt_config)
 
     config.gradient_class = SimpleReduceGradient
 

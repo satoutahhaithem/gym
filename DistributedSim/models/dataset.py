@@ -39,6 +39,8 @@ def get_dataset(dataset, block_size=1024, char=False, rank=None, world_size=None
     else:
         cache_dir = os.path.join("cache", dataset)
     os.makedirs(cache_dir, exist_ok=True)
+
+    assert rank is not None
     
     # Add rank to cache file name if distributed
     rank_suffix = f"_rank{rank}_of{world_size}" if rank is not None else ""
