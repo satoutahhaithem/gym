@@ -162,8 +162,8 @@ def get_dataset(dataset, block_size=1024, char=False, rank=None, world_size=None
         val_data = val_data[val_start_idx:val_end_idx]
 
     # Cast to int32 before caching
-    train_data = train_data.to(torch.int32)
-    val_data = val_data.to(torch.int32)
+    # train_data = train_data.to(torch.int32)
+    # val_data = val_data.to(torch.int32)
 
     # Cache the processed dataset shard
     cache_data = {
