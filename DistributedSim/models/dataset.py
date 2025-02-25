@@ -147,22 +147,16 @@ def get_dataset(dataset, block_size=1024, char=False, rank=None, world_size=None
 
     # If rank is provided, only keep the relevant shard of the data
     if rank is not None and world_size is not None:
-        # Calculate shard size and indices
+        # Calculate shard size and indices for the training data
         train_size = len(train_data)
         shard_size = train_size // world_size
         start_idx = rank * shard_size
         end_idx = start_idx + shard_size if rank < world_size - 1 else train_size
         
-        # Only keep the relevant shard
+        # Only keep the relevant shard for training data
         train_data = train_data[start_idx:end_idx]
         
-        # For validation, we can either shard it or keep a small subset for each rank
-        # TODO: Don't shard the validation set.
-        val_size = len(val_data)
-        val_shard_size = val_size // world_size
-        val_start_idx = rank * val_shard_size
-        val_end_idx = val_start_idx + val_shard_size if rank < world_size - 1 else val_size
-        val_data = val_data[val_start_idx:val_end_idx]
+        # Do not shard the validation set; keep the full validation data.
 
     # Cast to int32 before caching
     # train_data = train_data.to(torch.int32)
