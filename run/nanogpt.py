@@ -5,8 +5,7 @@ import numpy as np
 
 from DistributedSim.sim_builder import *
 from DistributedSim.sim_config import *
-from DistributedSim.gradient_strategy import *
-from DistributedSim.demo import *
+from DistributedSim.gradient_strategy.gradient_strategy import *
 
 from DistributedSim.models.nanogpt import GPT, GPTConfig, GPTTrainDataset
 from DistributedSim.models.dataset import *
@@ -48,7 +47,8 @@ def arg_parse():
     parser.add_argument("--eval_interval", type=int, default=100)
     parser.add_argument("--wandb_project", type=str, default=None)
     parser.add_argument("--wandb_name", type=str, default=None)
-
+    parser.add_argument("--val_size", type=int, default=256)
+    
     return parser
 
 def gen_gpt_config(args):
@@ -73,20 +73,17 @@ def config_gen(args, gpt_config):
         device_type=args.device_type,
         devices=args.devices,
         
-        # train_dataset=train_dataset,
-        # val_dataset=val_dataset,
         dataset_name=f'{args.dataset}_char' if args.char_dataset else args.dataset,
         char_dataset=args.char_dataset,
         batch_size=args.batch_size,
         local_minibatch_size=args.local_minibatch_size,
         block_size=args.block_size,
-        val_size=256,
+        val_size=args.val_size,
         save_dir=args.checkpoint_dir,
         checkpoint_interval=args.checkpoint_interval,
         eval_interval=args.eval_interval,
 
         criterion_class=torch.nn.CrossEntropyLoss,
-        # gradient_class=,
         gradient_config=GradientConfig(
             optimizer_class=torch.optim.AdamW,
             optimizer_kwargs={

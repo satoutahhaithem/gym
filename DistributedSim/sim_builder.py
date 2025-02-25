@@ -8,7 +8,7 @@ import os
 from tqdm import tqdm
 import pandas as pd
 import datetime
-
+from abc import ABC, abstractmethod
 from .sim_config import *
 from .train_node import *
 

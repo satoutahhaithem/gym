@@ -5,8 +5,8 @@ import numpy as np
 
 from DistributedSim.sim_builder import *
 from DistributedSim.sim_config import *
-from DistributedSim.gradient_strategy import *
-from DistributedSim.demo import *
+from DistributedSim.gradient_strategy.gradient_strategy import *
+from DistributedSim.gradient_strategy.diloco_gradient import *
 
 from DistributedSim.models.nanogpt import GPT, GPTConfig, GPTTrainDataset
 from DistributedSim.models.dataset import *

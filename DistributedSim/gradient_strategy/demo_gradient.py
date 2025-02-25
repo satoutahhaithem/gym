@@ -16,6 +16,24 @@ import torch.distributed as dist
 from einops import rearrange
 from typing import Optional, Callable
 
+from .gradient_strategy import GradientStrategy
+from .communicate import *
+
+class DeMoGradient(GradientStrategy):
+    def __init__(self, rank, model, config, logger=None):
+        super().__init__(rank, model, config, logger)
+        print('initialising DeMo engine')
+        self.optim = DeMo(model.parameters(), 
+                          **self.gradient_config.optimizer_kwargs, 
+                          custom_all_gather=super().all_gather)
+        self._setup_scheduler()
+
+    def step(self):
+        # DeMo communicates gradients and then does optimizer step.
+        self.optim.step()
+
+        super().step()  # Print number of bytes communicated. This can be put in a different method tbh.
+
 class DeMo(torch.optim.SGD):
     def __init__(
         self,

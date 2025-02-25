@@ -15,7 +15,7 @@ def main():
 
     # Base command components that remain the same for all runs.
     base_command = [
-        "python", "experiments/nanogpt_diloco.py",
+        "python", "run/nanogpt_diloco.py",
         "--dataset", args.dataset,
         "--local_minibatch_size", args.local_minibatch_size,
         "--batch_size", "32",

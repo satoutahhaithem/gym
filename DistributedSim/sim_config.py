@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Callable, Type
 import torch
 
-from .gradient_strategy import *
+from .gradient_strategy.gradient_strategy import *
 
 class SimConfig:
     def __init__(self,

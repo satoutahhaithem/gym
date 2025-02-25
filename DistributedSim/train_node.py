@@ -9,15 +9,14 @@ import os
 import copy
 
 from .sim_config import *
-from .gradient_strategy import *
+from .gradient_strategy.gradient_strategy import *
 from .wandb_logger import *
-from .communicate import *
+from .gradient_strategy.communicate import *
 
 from tqdm import tqdm
 
 from torch.profiler import profile, record_function, ProfilerActivity
 
-from .timer import Timer
 from .models.dataset import get_dataset
 from .models.nanogpt import GPTTrainDataset
 
