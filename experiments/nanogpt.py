@@ -12,7 +12,7 @@ from DistributedSim.models.nanogpt import GPT, GPTConfig, GPTTrainDataset
 from DistributedSim.models.dataset import *
 
 def gen_wandb_name(args):
-    name = f"bs{args.batch_size}_lr{args.learning_rate:.0e}_warm{args.warmup_steps}_max{args.max_steps}"
+    name = f"bs{args.batch_size}_lr{args.lr:.0e}_warm{args.warmup_steps}_max{args.max_steps}"
     return name
 
 def arg_parse():
@@ -36,7 +36,7 @@ def arg_parse():
 
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--local_minibatch_size", type=int, default=None)
-    parser.add_argument("--learning_rate", type=float, default=0.001)
+    parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--max_norm", type=float, default=1.0)
     parser.add_argument("--warmup_steps", type=int, default=1000)
     parser.add_argument("--max_steps", type=int, default=10000)
@@ -90,7 +90,7 @@ def config_gen(args, train_dataset, val_dataset, gpt_config):
         gradient_config=GradientConfig(
             optimizer_class=torch.optim.AdamW,
             optimizer_kwargs={
-                'lr': args.learning_rate,
+                'lr': args.lr,
             },
             max_norm=args.max_norm,
             lr_scheduler='lambda_cosine',

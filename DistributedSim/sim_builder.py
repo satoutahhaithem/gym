@@ -55,8 +55,6 @@ class LocalSimBuilder(SimBuilder):
         os.environ['MASTER_ADDR'] = 'localhost'
         os.environ['MASTER_PORT'] = str(12355 + self.config.gpu_offset - (10 if self.config.device == 'cpu' else 0))
 
-        os.environ['GLOO_SOCKET_IFNAME'] = 'lo0'
-
         # initialize the process group
         if self.config.device_type == 'cuda':
             dist.init_process_group("nccl" if len(self.config.devices) == self.config.num_nodes else "gloo", 
