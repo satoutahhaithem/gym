@@ -56,96 +56,95 @@ def get_dataset(dataset, block_size=1024, char=False, rank=None, world_size=None
     print(f"Loading dataset: {dataset} {'(char-level)' if char else '(GPT2 tokenization)'}")
     if dataset == "shakespeare":
         raw_dataset = load_dataset("Trelis/tiny-shakespeare")
-        train_texts = [text["Text"] for text in raw_dataset["train"]]
-        test_texts = [text["Text"] for text in raw_dataset["test"]]
+        raw_dataset = raw_dataset.map(
+            lambda x: {'text': x['Text']},
+            remove_columns=raw_dataset['train'].column_names,
+        )
+        # train_texts = [text["text"] for text in raw_dataset["train"]]
+        # test_texts = [text["text"] for text in raw_dataset["test"]]
     elif dataset == "wikitext":
         raw_dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
-        train_texts = [text for text in raw_dataset["train"]["text"] if text.strip()]
-        test_texts = [text for text in raw_dataset["test"]["text"] if text.strip()]
+        raw_dataset = raw_dataset.map(
+            lambda x: {'text': x['text']},
+            remove_columns=raw_dataset['train'].column_names,
+        )
+        # train_texts = [text for text in raw_dataset["train"]["text"] if text.strip()]
+        # test_texts = [text for text in raw_dataset["test"]["text"] if text.strip()]
     elif dataset == "code":
         raw_dataset = load_dataset("codeparrot/codeparrot-clean-train", split="train[:1%]")
-        train_texts = [text for text in raw_dataset["content"]]
-        # Since this dataset doesn't come with a test split, create one
-        split_idx = int(len(train_texts) * 0.9)
-        test_texts = train_texts[split_idx:]
-        train_texts = train_texts[:split_idx]
+        raw_dataset = raw_dataset.map(
+            lambda x: {'text': x['content']},
+            remove_columns=raw_dataset['train'].column_names,
+        )
     elif dataset == "owt":
         # Load the OpenWebText dataset from Hugging Face
-        raw_dataset = load_dataset("Skylion007/openwebtext", trust_remote_code=True, split='train[:10%]')
-        # The dataset comes with a single split ("train"); extract the text field.
-        all_texts = raw_dataset["text"]
-        # Create train/validation splits (90/10)
-        split_idx = int(len(all_texts) * 0.9)
-        train_texts = all_texts[:split_idx]
-        test_texts = all_texts[split_idx:]
+        raw_dataset = load_dataset("Skylion007/openwebtext", trust_remote_code=True, split='train[:1%]')
+        # Create a DatasetDict with train/validation splits (90/10)
+        split_idx = int(len(raw_dataset) * 0.9)
+        train_split = raw_dataset.select(range(split_idx))
+        test_split = raw_dataset.select(range(split_idx, len(raw_dataset)))
+        raw_dataset = DatasetDict({
+            'train': train_split,
+            'test': test_split
+        })
+        # No need to rename columns as 'text' is already the field name
     else:
         raise ValueError(f"Unknown dataset: {dataset}")
 
-    print(len(train_texts), len(test_texts))
+    ## Initialize the tokenizer
 
-    # Concatenate all texts with EOS token between them
-    # train_text = "\n".join(train_texts)
-    # test_text = "\n".join(test_texts)
-
-    # Create standardized dataset format using datasets.Dataset
-    standardized_dataset = DatasetDict({
-        "train": Dataset.from_dict({"text": train_texts}),
-        "test": Dataset.from_dict({"text": test_texts})
-    })
-
-    # Initialize the tokenizer
     if char:
-        # Use character-based tokenization
         char_int, eos_token_id = generate_char_vocab()
         vocab_size = len(char_int)
-        custom_tokenize = lambda text: {"input_ids": [[char_int[c] for c in t] for t in text["text"]]}
+        def tokenize(text):
+            if type(text['text']) == str:
+                return {'tokenized': [char_int[c] for c in text['text']]}
+            elif type(text['text']) == list:
+                return {'tokenized': [[char_int[c] for c in t] for t in text["text"]]}
+            else:
+                raise Exception("Unknown type")
     else:
-        # Use GPT2 tokenizer
         from transformers import GPT2Tokenizer
         tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
         vocab_size = tokenizer.vocab_size
         eos_token_id = tokenizer.eos_token_id
-        custom_tokenize = lambda text: tokenizer(text["text"], truncation=True, max_length=block_size)
+        tokenize = lambda text: {'tokenized': tokenizer(text['text'], truncation=True, max_length=1024)['input_ids']}
 
-    print("Tokenizing dataset...")
-    print(standardized_dataset)
-    tokenized_dataset = standardized_dataset.map(
-        custom_tokenize,
-        remove_columns=["text"],
-        batched=True,
-        num_proc=os.cpu_count()
+    ## Tokenize the dataset
+
+    raw_dataset = raw_dataset.map(
+        tokenize,
+        # remove_columns=raw_dataset['train'].column_names,
+        num_proc=os.cpu_count(),
+        batched=True
     )
 
-    # Convert tokenized lists to tensors with fixed block size
-    def convert_to_tensor(examples):
-        # Flatten all ids and add EOS tokens
-        all_ids = np.concatenate([np.array(ids + [eos_token_id]) for ids in examples["input_ids"] if ids])
-        num_blocks = len(all_ids) // block_size
-        if num_blocks == 0:
-            return {"input_ids": torch.tensor([])}
-        all_ids = all_ids[: num_blocks * block_size]
-        tensor_data = torch.from_numpy(all_ids.reshape(-1, block_size))
-        return {"input_ids": tensor_data}
+    ## Batch examples into one long tensor
 
-    print("Converting tokenized dataset to tensors...")
-    tensor_dataset = tokenized_dataset.map(
-        convert_to_tensor,
-        remove_columns=tokenized_dataset["train"].column_names,
+    def concatenate_ids(examples):
+        # Flatten all ids and add EOS tokens
+        all_ids = np.concatenate([np.array(ids + [eos_token_id]) for ids in examples["tokenized"] if ids])
+        return {'ids': all_ids}
+
+    dataset = raw_dataset.map(
+        concatenate_ids,
         batched=True,
+        remove_columns=raw_dataset['train'].column_names,
         num_proc=os.cpu_count()
     )
 
     # Build train and validation tensors
-    tensor_dataset["train"].set_format("torch", columns=["input_ids"])
-    tensor_dataset["test"].set_format("torch", columns=["input_ids"])
-    train_data = tensor_dataset["train"]["input_ids"].reshape(-1)
-    val_data = tensor_dataset["test"]["input_ids"].reshape(-1)
+    dataset.set_format(type='torch', columns=['ids'])
+
+    train_data = dataset["train"]["ids"]
+    val_data = dataset["test"]["ids"]
 
     print(f"Train data size: {train_data.shape}, Val data size: {val_data.shape}")
 
     # If rank is provided, only keep the relevant shard of the data
+    ## TODO: Do this first to save time.
     if rank is not None and world_size is not None:
         # Calculate shard size and indices for the training data
         train_size = len(train_data)
@@ -158,17 +157,13 @@ def get_dataset(dataset, block_size=1024, char=False, rank=None, world_size=None
         
         # Do not shard the validation set; keep the full validation data.
 
-    # Cast to int32 before caching
-    # train_data = train_data.to(torch.int32)
-    # val_data = val_data.to(torch.int32)
-
     # Cache the processed dataset shard
     cache_data = {
         "train": train_data,
         "val": val_data,
         "vocab_size": vocab_size,
     }
-    torch.save(cache_data, data_cache_file)
+    # torch.save(cache_data, data_cache_file)
 
     return train_data, val_data, vocab_size
 
@@ -180,12 +175,13 @@ if __name__ == "__main__":
                         help="Dataset: shakespeare, wikitext, or code")
     parser.add_argument("--char", action="store_true",
                         help="Enable character-level tokenization")
+    parser.add_argument("--rank", type=int, default=0)
+    parser.add_argument("--world_size", type=int, default=1)
     args = parser.parse_args()
 
-    if args.char:
-        # When using character-level tokenization, get the char vocab info.
-        train_data, val_data, vocab_size = get_dataset(args.dataset, args.block_size, char=True)
-        print(train_data.shape, val_data.shape, vocab_size)
-    else:
-        train_data, val_data, vocab_size = get_dataset(args.dataset, args.block_size, char=False)
-        print(train_data.shape, val_data.shape, vocab_size)
+    train_data, val_data, vocab_size = get_dataset(args.dataset, 
+                                                   args.block_size, 
+                                                   char=args.char,
+                                                   rank=args.rank,
+                                                   world_size=args.world_size)
+    print(train_data.shape, val_data.shape, vocab_size)
