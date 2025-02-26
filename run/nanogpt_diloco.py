@@ -18,6 +18,8 @@ def main():
 
     parser.add_argument("--diloco_interval", type=int, default=100)
     parser.add_argument('--outer_lr', type=float, default=0.7)
+    parser.add_argument("--nesterov", type=bool, default=True)
+    parser.add_argument("--outer_momentum", type=float, default=0.9)
 
     args = parser.parse_args()
 
@@ -31,8 +33,8 @@ def main():
     config.gradient_config.outer_optimizer_cls = torch.optim.SGD
     config.gradient_config.outer_optimizer_kwargs = {
         'lr': args.outer_lr,
-        'nesterov': True,
-        'momentum': 0.9,
+        'nesterov': args.nesterov,
+        'momentum': args.outer_momentum,
     }
 
     simbuilder = LocalSimBuilder(config)

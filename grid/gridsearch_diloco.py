@@ -10,8 +10,9 @@ def main():
     args = parser.parse_args()
 
     # Define grid search values for lr and outer_lr.
-    lr_values = [0.0001, 0.0002, 0.0003]
-    outer_lr_values = [0.6, 0.7, 0.8]
+    lr_values = [0.00005, 0.0001, 0.0002]
+    outer_lr_values = [0.7]
+    momentum_values = [0.8, 0.9, 0.95, 0.99]
 
     # Base command components that remain the same for all runs.
     base_command = [
@@ -36,13 +37,16 @@ def main():
     # Loop over each combination of lr and outer_lr.
     for lr in lr_values:
         for outer_lr in outer_lr_values:
-            # Create the full command by appending lr, outer_lr, and a unique wandb_name.
-            command = base_command.copy()  # copy to avoid modifying the original list
-            command.extend([
-                "--lr", str(lr), 
-                "--outer_lr", str(outer_lr),
-                "--wandb_name", f'lr{lr}_outerlr_{outer_lr}'
-            ])
+            for momentum in momentum_values:
+                # Create the full command by appending lr, outer_lr, and a unique wandb_name.
+                command = base_command.copy()  # copy to avoid modifying the original list
+                command.extend([
+                    "--lr", str(lr), 
+                    "--outer_lr", str(outer_lr),
+                    "--nesterov", "True",
+                    "--outer_momentum", str(momentum),
+                    "--wandb_name", f'lr{lr}_outerlr_{outer_lr}_momentum_{momentum}'
+                ])
 
             # Print the command being executed.
             print("Running command:", " ".join(command))
