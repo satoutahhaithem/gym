@@ -170,7 +170,7 @@ def get_dataset(dataset, block_size=1024, char=False, rank=None, world_size=None
         "vocab_size": vocab_size,
     }
     # Optionally cache the processed data:
-    # torch.save(cache_data, data_cache_file)
+    torch.save(cache_data, data_cache_file)
 
     return train_data, val_data, vocab_size
 
