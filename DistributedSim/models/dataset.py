@@ -174,14 +174,14 @@ def get_dataset(dataset, block_size=1024, char=False, rank=None, world_size=None
 
     return train_data, val_data, vocab_size
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--block_size", type=int, default=1024)
     parser.add_argument("--dataset", type=str, default="shakespeare",
                         help="Dataset: shakespeare, wikitext, code, or owt")
     parser.add_argument("--char", action="store_true",
                         help="Enable character-level tokenization")
-    parser.add_argument("--rank", type=int, default=0)
+    parser.add_argument("--rank", type=int, default=None)
     parser.add_argument("--world_size", type=int, default=1)
     parser.add_argument("--dataset_proportion", type=float, default=1.0,
                         help="Proportion of the dataset to use (0 to 1)")
@@ -189,11 +189,24 @@ if __name__ == "__main__":
                         help="Fraction of the used dataset to reserve for validation")
     args = parser.parse_args()
 
-    train_data, val_data, vocab_size = get_dataset(args.dataset, 
-                                                   args.block_size, 
-                                                   char=args.char,
-                                                   rank=args.rank,
-                                                   world_size=args.world_size,
-                                                   dataset_proportion=args.dataset_proportion,
-                                                   val_ratio=args.val_ratio)
-    print(train_data.shape, val_data.shape, vocab_size)
+    if args.rank is not None:
+        # Single rank execution
+        train_data, val_data, vocab_size = get_dataset(args.dataset, 
+                                                       args.block_size, 
+                                                       char=args.char,
+                                                       rank=args.rank,
+                                                       world_size=args.world_size,
+                                                       dataset_proportion=args.dataset_proportion,
+                                                       val_ratio=args.val_ratio)
+        print(f"Rank {args.rank}:", train_data.shape, val_data.shape, vocab_size)
+    else:
+        # Run for all ranks sequentially
+        for rank in range(args.world_size):
+            train_data, val_data, vocab_size = get_dataset(args.dataset, 
+                                                           args.block_size, 
+                                                           char=args.char,
+                                                           rank=rank,
+                                                           world_size=args.world_size,
+                                                           dataset_proportion=args.dataset_proportion,
+                                                           val_ratio=args.val_ratio)
+            print(f"Rank {rank}:", train_data.shape, val_data.shape, vocab_size)
