@@ -74,7 +74,8 @@ class TrainNode:
                                                         block_size=self.config.block_size, 
                                                         rank=self.rank,
                                                         world_size=self.config.num_nodes,
-                                                        char=self.config.char_dataset)
+                                                        char=self.config.char_dataset,
+                                                        dataset_proportion=self.config.dataset_proportion)
 
         self.train_dataset = GPTTrainDataset(train_data, self.config.block_size)
         self.val_dataset = GPTTrainDataset(val_data, self.config.block_size)

@@ -48,7 +48,8 @@ def arg_parse():
     parser.add_argument("--wandb_project", type=str, default=None)
     parser.add_argument("--wandb_name", type=str, default=None)
     parser.add_argument("--val_size", type=int, default=256)
-    
+    parser.add_argument("--dataset_proportion", type=float, default=1.0)
+
     return parser
 
 def gen_gpt_config(args):
@@ -82,6 +83,7 @@ def config_gen(args, gpt_config):
         save_dir=args.checkpoint_dir,
         checkpoint_interval=args.checkpoint_interval,
         eval_interval=args.eval_interval,
+        dataset_proportion=args.dataset_proportion,
 
         criterion_class=torch.nn.CrossEntropyLoss,
         gradient_config=GradientConfig(
