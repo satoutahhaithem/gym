@@ -210,3 +210,6 @@ def main():
                                                            dataset_proportion=args.dataset_proportion,
                                                            val_ratio=args.val_ratio)
             print(f"Rank {rank}:", train_data.shape, val_data.shape, vocab_size)
+
+if __name__ == "__main__":
+    main()
