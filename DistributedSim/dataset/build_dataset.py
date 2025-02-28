@@ -178,8 +178,7 @@ def main():
                                                        start_pc=args.start_pc,
                                                        end_pc=args.end_pc)
     
-    print(f"Finished importing dataset: {args.dataset} {\
-        '(char-level)' if args.char else '(GPT2 tokenization)'} start%: {args.start_pc} end%: {args.end_pc}")
+    print(f"Finished importing dataset: {args.dataset} {'(char-level)' if args.char else '(GPT2 tokenization)'} start%: {args.start_pc} end%: {args.end_pc}")
 
 if __name__ == "__main__":
     main()
