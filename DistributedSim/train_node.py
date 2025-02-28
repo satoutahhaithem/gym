@@ -83,8 +83,8 @@ class TrainNode:
                                              char=self.config.char_dataset)
 
         val_data, self.vocab_size = get_dataset(dataset_id,
-                                             val_start * self.config.dataset_proportion,
-                                             val_end * self.config.dataset_proportion,
+                                             val_start,
+                                             val_end,
                                              block_size=self.config.block_size,
                                              char=self.config.char_dataset)
 
