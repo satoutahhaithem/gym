@@ -395,18 +395,4 @@ class GPT(nn.Module):
         return idx
 
 
-class GPTTrainDataset(torch.utils.data.Dataset):
-    """Simple dataset wrapper for training data"""
-    def __init__(self, data, block_size):
-        self.data = data
-        self.block_size = block_size
-
-    def __len__(self):
-        return len(self.data) - self.block_size - 1
-
-    def __getitem__(self, idx):
-        x = self.data[idx : idx + self.block_size + 1]
-        # return x, x
-        return x[:-1], x[1:]
-
 

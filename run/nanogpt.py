@@ -8,7 +8,7 @@ from DistributedSim.sim_config import *
 from DistributedSim.gradient_strategy.gradient_strategy import *
 
 from DistributedSim.models.nanogpt import GPT, GPTConfig, GPTTrainDataset
-from DistributedSim.models.dataset import *
+from DistributedSim.dataset.build_dataset import *
 
 def gen_wandb_name(args):
     name = f"bs{args.batch_size}_lr{args.lr:.0e}_warm{args.warmup_steps}_max{args.max_steps}"
@@ -49,6 +49,7 @@ def arg_parse():
     parser.add_argument("--wandb_name", type=str, default=None)
     parser.add_argument("--val_size", type=int, default=256)
     parser.add_argument("--dataset_proportion", type=float, default=1.0)
+    parser.add_argument("--val_proportion", type=float, default=0.1)
 
     return parser
 
@@ -84,6 +85,7 @@ def config_gen(args, gpt_config):
         checkpoint_interval=args.checkpoint_interval,
         eval_interval=args.eval_interval,
         dataset_proportion=args.dataset_proportion,
+        val_proportion=args.val_proportion,
 
         criterion_class=torch.nn.CrossEntropyLoss,
         gradient_config=GradientConfig(

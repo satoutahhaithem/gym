@@ -10,8 +10,8 @@ from .gradient_strategy.gradient_strategy import *
 from .wandb_logger import *
 from .gradient_strategy.communicate import *
 
-from .models.dataset import get_dataset
-from .models.nanogpt import GPTTrainDataset
+from .dataset.dataset import get_dataset
+from .dataset.gpt_dataset import GPTTrainDataset
 
 class TrainNode:
     '''
@@ -69,19 +69,29 @@ class TrainNode:
     
     def get_datasets(self):
         ## Import Datasets
+        dataset_id = self.config.dataset_name.split('_')[0]
 
-        train_data, val_data, self.vocab_size = get_dataset(self.config.dataset_name.split('_')[0], 
-                                                        block_size=self.config.block_size, 
-                                                        rank=self.rank,
-                                                        world_size=self.config.num_nodes,
-                                                        char=self.config.char_dataset,
-                                                        dataset_proportion=self.config.dataset_proportion)
+        train_start = (1 - self.config.val_proportion) * self.rank / self.config.num_nodes
+        train_end = (1 - self.config.val_proportion) * (self.rank + 1) / self.config.num_nodes
+        val_start = (1 - self.config.val_proportion)
+        val_end = 1.0
+
+        train_data, self.vocab_size = get_dataset(dataset_id,
+                                             train_start * self.config.dataset_proportion,
+                                             train_end * self.config.dataset_proportion,
+                                             block_size=self.config.block_size,
+                                             char=self.config.char_dataset)
+
+        val_data, self.vocab_size = get_dataset(dataset_id,
+                                             val_start * self.config.dataset_proportion,
+                                             val_end * self.config.dataset_proportion,
+                                             block_size=self.config.block_size,
+                                             char=self.config.char_dataset)
 
         self.train_dataset = GPTTrainDataset(train_data, self.config.block_size)
         self.val_dataset = GPTTrainDataset(val_data, self.config.block_size)
 
         ## Build Dataloaders
-
         self.train_dataloader = DataLoader(self.train_dataset, 
                           batch_size=self.config.batch_size,
                           shuffle=True)

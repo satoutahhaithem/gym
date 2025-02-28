@@ -9,7 +9,7 @@ from DistributedSim.gradient_strategy.gradient_strategy import *
 from DistributedSim.gradient_strategy.diloco_gradient import *
 
 from DistributedSim.models.nanogpt import GPT, GPTConfig, GPTTrainDataset
-from DistributedSim.models.dataset import *
+from DistributedSim.dataset.build_dataset import *
 
 from nanogpt import arg_parse, config_gen, gen_gpt_config
 
