@@ -1,6 +1,7 @@
 import math
 import torch
 import torch.distributed as dist
+from torch import nn
 
 from .gradient_strategy import GradientStrategy
 from .communicate import *
@@ -18,6 +19,10 @@ class SPARTAGradient(GradientStrategy):
         # self.buffer = []
 
     def step(self):
+        if self.gradient_config.max_norm:
+            norm = nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.gradient_config.max_norm)
+            # print(f'Rank {self.rank}: Clipped grad norm to {norm}')
+
         self.optim.step()
 
         if self.config.num_nodes > 1:
