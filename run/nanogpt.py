@@ -40,6 +40,7 @@ def arg_parse():
     parser.add_argument("--warmup_steps", type=int, default=1000)
     parser.add_argument("--max_steps", type=int, default=10000)
     parser.add_argument("--cosine_anneal", action='store_true')
+    parser.add_argument("--autocast", action='store_true')
 
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints")
     parser.add_argument("--checkpoint_interval", type=int, default=None)
@@ -74,7 +75,8 @@ def config_gen(args, gpt_config):
         num_nodes=args.num_nodes,
         device_type=args.device_type,
         devices=args.devices,
-        
+        autocast=args.autocast,
+
         dataset_name=f'{args.dataset}_char' if args.char_dataset else args.dataset,
         char_dataset=args.char_dataset,
         batch_size=args.batch_size,

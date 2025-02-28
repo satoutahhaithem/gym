@@ -143,13 +143,13 @@ class TrainNode:
             x_batch = x[i:i+minibatch_size]
             y_batch = y[i:i+minibatch_size]
 
-            if self.config.device_type == 'cpu':
-                output = self.model(x_batch).transpose(1, 2)
-                loss = self.criterion(output, y_batch)
-            else:
+            if self.config.autocast:
                 with torch.autocast(device_type=self.config.device_type, dtype=torch.bfloat16):
                     output = self.model(x_batch).transpose(1, 2)
                     loss = self.criterion(output, y_batch)
+            else:
+                output = self.model(x_batch).transpose(1, 2)
+                loss = self.criterion(output, y_batch)
 
             loss.backward()
 
@@ -200,13 +200,13 @@ class TrainNode:
                         output = this_model(x_batch).transpose(1, 2)
                         loss = self.criterion(output, y_batch)
 
-                        if self.config.device_type == 'cpu':
-                            output = self.model(x_batch).transpose(1, 2)
-                            loss = self.criterion(output, y_batch)
-                        else:
+                        if self.config.autocast:
                             with torch.autocast(device_type=self.config.device_type, dtype=torch.bfloat16):
-                                output = self.model(x_batch).transpose(1, 2)
+                                output = this_model(x_batch).transpose(1, 2)
                                 loss = self.criterion(output, y_batch)
+                        else:
+                            output = this_model(x_batch).transpose(1, 2)
+                            loss = self.criterion(output, y_batch)
 
 
                     loss_total += loss.item()
