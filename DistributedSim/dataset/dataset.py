@@ -3,6 +3,7 @@ import numpy as np
 import boto3
 import io
 import os
+from tqdm import tqdm
 
 from .build_dataset import build_dataset
 from .gpt_dataset import GPTTrainDataset
@@ -34,8 +35,10 @@ def load_data(start_pc, end_pc):
 
     chunk_ids = np.arange(chunk_count)
     chunk_ids = chunk_ids[int(start_pc * chunk_count):int(end_pc * chunk_count)]
-    print(chunk_ids)
-    data = [load_chunk(chunk_id, s3_client) for chunk_id in chunk_ids]
+    print(f' importing {len(chunk_ids)} chunks')
+    data = []
+    for chunk_id in tqdm(chunk_ids):
+        data.append(load_chunk(chunk_id, s3_client))
     return np.concatenate(data)
 
 
