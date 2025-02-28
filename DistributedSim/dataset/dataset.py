@@ -35,7 +35,7 @@ def load_data(start_pc, end_pc):
 
     chunk_ids = np.arange(chunk_count)
     chunk_ids = chunk_ids[int(start_pc * chunk_count):int(end_pc * chunk_count)]
-    print(f' importing {len(chunk_ids)} chunks')
+    print(f' importing {len(chunk_ids)} chunks [{chunk_ids[0]},{chunk_ids[-1]}]')
     data = []
     for chunk_id in tqdm(chunk_ids):
         data.append(load_chunk(chunk_id, s3_client))
