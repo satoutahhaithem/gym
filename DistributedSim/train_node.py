@@ -11,7 +11,6 @@ from .wandb_logger import *
 from .gradient_strategy.communicate import *
 
 from .dataset.dataset import get_dataset
-from .dataset.gpt_dataset import GPTTrainDataset
 
 class TrainNode:
     '''
@@ -76,20 +75,19 @@ class TrainNode:
         val_start = (1 - self.config.val_proportion)
         val_end = 1.0
 
-        train_data, self.vocab_size = get_dataset(dataset_id,
+        self.train_dataset, self.vocab_size = get_dataset(dataset_id,
                                              train_start * self.config.dataset_proportion,
                                              train_end * self.config.dataset_proportion,
                                              block_size=self.config.block_size,
-                                             char=self.config.char_dataset)
+                                             char=self.config.char_dataset,
+                                             device=self.device)
 
-        val_data, self.vocab_size = get_dataset(dataset_id,
+        self.val_dataset, self.vocab_size = get_dataset(dataset_id,
                                              val_start,
                                              val_end,
                                              block_size=self.config.block_size,
-                                             char=self.config.char_dataset)
-
-        self.train_dataset = GPTTrainDataset(train_data, device=self.device)
-        self.val_dataset = GPTTrainDataset(val_data, device=self.device)
+                                             char=self.config.char_dataset,
+                                             device=self.device)
 
         ## Build Dataloaders
         self.train_dataloader = DataLoader(self.train_dataset, 

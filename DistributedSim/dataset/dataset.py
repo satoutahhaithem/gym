@@ -6,7 +6,7 @@ import os
 from tqdm import tqdm
 
 from .build_dataset import build_dataset
-from .gpt_dataset import GPTTrainDataset
+from .gpt_dataset import NonContiguousGPTTrainDataset, ContiguousGPTTrainDataset
 
 def count_files_in_s3_folder(bucket_name, folder_prefix, s3_client):
     paginator = s3_client.get_paginator('list_objects_v2')
@@ -42,12 +42,16 @@ def load_data(start_pc, end_pc):
     return np.concatenate(data)
 
 
-def get_dataset(dataset, start_pc, end_pc, block_size=1024, char=False):
+def get_dataset(dataset, start_pc, end_pc, block_size=1024, char=False, device=None):
     if dataset != 'owt':
         data, vocab_size = build_dataset(dataset, block_size, char, start_pc, end_pc)
+
+        dataset = ContiguousGPTTrainDataset(data, block_size=block_size, device=device)
     else:
         # For OWT, pull from S3
         data = load_data(start_pc, end_pc)
         vocab_size = 50257
 
-    return data, vocab_size
+        dataset = NonContiguousGPTTrainDataset(data, device=device)
+
+    return dataset, vocab_size

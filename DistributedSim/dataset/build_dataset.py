@@ -43,10 +43,9 @@ def build_dataset(dataset, block_size=1024, char=False, start_pc=0.0, end_pc=1.0
 
     data_cache_file = os.path.join(cache_dir, f"data_block{block_size}_{start_pc}_{end_pc}.pt")
 
-    # if os.path.exists(data_cache_file):
-    #     print(f"Loading cached dataset from {data_cache_file}")
-    #     cached_data = torch.load(data_cache_file)
-    #     return cached_data["train"], cached_data["val"], cached_data["vocab_size"]
+    if os.path.exists(data_cache_file):
+        print(f"Loading cached dataset from {data_cache_file}")
+        np.load(data_cache_file)
 
     print(f"Loading dataset: {dataset} {'(char-level)' if char else '(GPT2 tokenization)'} start%: {start_pc} end%: {end_pc}")
     
@@ -124,19 +123,25 @@ def build_dataset(dataset, block_size=1024, char=False, start_pc=0.0, end_pc=1.0
         batched=True
     )
 
-    # Convert tokenized lists to blocks with fixed block size
-    def convert_to_blocks(examples):
-        # Flatten all ids and add EOS tokens
-        all_ids = np.concatenate([np.array(ids + [eos_token_id]) for ids in examples["tokenized"] if ids])
-        num_blocks = len(all_ids) // block_size
-        if num_blocks == 0:
-            return {"ids": torch.tensor([])}
-        all_ids = all_ids[: num_blocks * block_size]
-        data_2d = all_ids.reshape(-1, block_size)
-        return {"ids": data_2d}
+    if dataset != 'owt':
+        # Convert tokenized lists to 1-d contiguous stream.
+        def aggregate_examples(examples):
+            all_ids = np.concatenate([np.array(ids + [eos_token_id]) for ids in examples["tokenized"] if ids])
+            return {'ids': all_ids}
+    else:
+        # Convert tokenized lists to blocks with fixed block size
+        def aggregate_examples(examples):
+            # Flatten all ids and add EOS tokens
+            all_ids = np.concatenate([np.array(ids + [eos_token_id]) for ids in examples["tokenized"] if ids])
+            num_blocks = len(all_ids) // block_size
+            if num_blocks == 0:
+                return {"ids": torch.tensor([])}
+            all_ids = all_ids[: num_blocks * block_size]
+            data_2d = all_ids.reshape(-1, block_size)
+            return {"ids": data_2d}
 
     dataset_processed = dataset.map(
-        convert_to_blocks,
+        aggregate_examples,
         batched=True,
         remove_columns=dataset.column_names,
         num_proc=os.cpu_count()
@@ -149,13 +154,6 @@ def build_dataset(dataset, block_size=1024, char=False, start_pc=0.0, end_pc=1.0
     print(f"Dataset size: {data.shape}")
 
     np.save(data_cache_file, data)
-
-    # cache_data = {
-    #     "data": data,
-    #     "vocab_size": vocab_size,
-    # }
-    # # Optionally cache the processed data:
-    # torch.save(cache_data, data_cache_file)
 
     return data, vocab_size
 

@@ -7,7 +7,7 @@ from DistributedSim.sim_builder import *
 from DistributedSim.sim_config import *
 from DistributedSim.gradient_strategy.gradient_strategy import *
 
-from DistributedSim.models.nanogpt import GPT, GPTConfig, GPTTrainDataset
+from DistributedSim.models.nanogpt import GPT, GPTConfig
 from DistributedSim.dataset.build_dataset import *
 
 def gen_wandb_name(args):
