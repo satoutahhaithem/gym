@@ -88,8 +88,8 @@ class TrainNode:
                                              block_size=self.config.block_size,
                                              char=self.config.char_dataset)
 
-        self.train_dataset = GPTTrainDataset(train_data, self.config.block_size)
-        self.val_dataset = GPTTrainDataset(val_data, self.config.block_size)
+        self.train_dataset = GPTTrainDataset(train_data)
+        self.val_dataset = GPTTrainDataset(val_data)
 
         ## Build Dataloaders
         self.train_dataloader = DataLoader(self.train_dataset, 
