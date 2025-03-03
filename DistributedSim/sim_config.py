@@ -12,8 +12,6 @@ class SimConfig:
                  train_dataset: Optional[torch.utils.data.Dataset] = None,
                  val_dataset: Optional[torch.utils.data.Dataset] = None,
                  batch_size: int = 64,
-                 criterion_class: Optional[Type[torch.nn.Module]] = None,
-                 criterion_kwargs: dict = {},
                  gradient_class: Optional[Type[GradientStrategy]] = None,
                  gradient_config: dict = {},
                  eval_interval: int = 10,
@@ -29,9 +27,6 @@ class SimConfig:
         self.train_dataset = train_dataset
         self.val_dataset = val_dataset
         self.batch_size = batch_size
-
-        self.criterion_class = criterion_class
-        self.criterion_kwargs = criterion_kwargs
 
         self.gradient_class = gradient_class
         self.gradient_config = gradient_config

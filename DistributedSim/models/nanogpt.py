@@ -209,6 +209,8 @@ class GPT(nn.Module):
         # report number of parameters
         # print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
 
+        self.criterion = nn.CrossEntropyLoss()
+
     def get_num_params(self, non_embedding=True):
         """
         Return the number of parameters in the model.
@@ -229,7 +231,7 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, inference=False):
+    def forward(self, idx, y, inference=False):
         device = idx.device
         b, t = idx.size()
         assert (
@@ -249,7 +251,10 @@ class GPT(nn.Module):
             x = x[:, [-1], :]
             # if we are given some desired targets also calculate the loss
         logits = self.lm_head(x)
-        return logits
+
+        logits = logits.transpose(-1, -2)
+        loss = self.criterion(logits, y)
+        return logits, loss
 
     def crop_block_size(self, block_size):
         # model surgery to decrease the block size if necessary

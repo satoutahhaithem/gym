@@ -89,7 +89,6 @@ def config_gen(args, gpt_config):
         dataset_proportion=args.dataset_proportion,
         val_proportion=args.val_proportion,
 
-        criterion_class=torch.nn.CrossEntropyLoss,
         gradient_config=GradientConfig(
             optimizer_class=torch.optim.AdamW,
             optimizer_kwargs={

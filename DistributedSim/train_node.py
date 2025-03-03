@@ -40,8 +40,6 @@ class TrainNode:
             for _, param in self.model.named_parameters():
                 broadcast(param.data, src=0)
 
-        self.criterion = self.config.criterion_class(**self.config.criterion_kwargs)
-
         self.local_step = 0
         self.max_steps = len(self.train_dataloader) * self.config.num_epochs
         if self.config.gradient_config.max_local_steps:
@@ -143,11 +141,9 @@ class TrainNode:
 
             if self.config.autocast:
                 with torch.autocast(device_type=self.config.device_type, dtype=torch.bfloat16):
-                    output = self.model(x_batch).transpose(1, 2)
-                    loss = self.criterion(output, y_batch)
+                    _, loss = self.model(x_batch, y_batch)
             else:
-                output = self.model(x_batch).transpose(1, 2)
-                loss = self.criterion(output, y_batch)
+                _, loss = self.model(x_batch, y_batch)
 
             loss.backward()
 
@@ -195,17 +191,11 @@ class TrainNode:
                         x_batch = x[i:i+minibatch_size]
                         y_batch = y[i:i+minibatch_size]
 
-                        output = this_model(x_batch).transpose(1, 2)
-                        loss = self.criterion(output, y_batch)
-
                         if self.config.autocast:
                             with torch.autocast(device_type=self.config.device_type, dtype=torch.bfloat16):
-                                output = this_model(x_batch).transpose(1, 2)
-                                loss = self.criterion(output, y_batch)
+                                _, loss = this_model(x_batch, y_batch)
                         else:
-                            output = this_model(x_batch).transpose(1, 2)
-                            loss = self.criterion(output, y_batch)
-
+                            _, loss = this_model(x_batch, y_batch)
 
                     loss_total += loss.item()
 
