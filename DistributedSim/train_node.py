@@ -197,7 +197,7 @@ class TrainNode:
                         else:
                             _, loss = this_model(x_batch, y_batch)
 
-                    loss_total += loss.item()
+                        loss_total += loss.item()
 
         # Rank 0 logs the local evaluation.
         if self.rank == 0:
