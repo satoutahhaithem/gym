@@ -77,15 +77,13 @@ class TrainNode:
                                              train_start * self.config.dataset_proportion,
                                              train_end * self.config.dataset_proportion,
                                              block_size=self.config.block_size,
-                                             char=self.config.char_dataset,
-                                             device=self.device)
+                                             char=self.config.char_dataset)
 
         self.val_dataset, self.vocab_size = get_dataset(dataset_id,
                                              val_start,
                                              val_end,
                                              block_size=self.config.block_size,
-                                             char=self.config.char_dataset,
-                                             device=self.device)
+                                             char=self.config.char_dataset)
 
         ## Build Dataloaders
         self.train_dataloader = DataLoader(self.train_dataset, 
