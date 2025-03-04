@@ -35,6 +35,8 @@ def main():
     config.gradient_class = DeMoGradient
     # Configure DeMo optimizer parameters
     config.gradient_config.optimizer_kwargs = {
+        'lr': args.lr,
+
         'compression_decay': args.compression_decay,
         'compression_topk': args.compression_topk,
         'compression_chunk': args.compression_chunk,
