@@ -46,8 +46,7 @@ class TrainNode:
             self.max_steps = min(self.max_steps, 
                                  self.config.gradient_config.max_local_steps)
 
-            if not hasattr(self.config.gradient_config, 'max_local_steps'):
-                self.config.gradient_config.max_local_steps = self.max_steps
+            self.config.gradient_config.max_local_steps = self.max_steps
 
         if self.rank == 0:
             self.logger = WandbLogger(rank=self.rank, 
