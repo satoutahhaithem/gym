@@ -2,6 +2,7 @@ import torch.distributed as dist
 from copy import deepcopy
 
 from torch.nn import utils as nn_utils
+import torch
 
 from .gradient_strategy import GradientStrategy
 from .communicate import *
@@ -34,12 +35,12 @@ class DiLoCoGradient(GradientStrategy):
             broadcast(param.data, src=0)
 
     def _set_master_grad(self) -> None:
-        for name, param in self.model.named_parameters():
-            param.grad = self.master_model.state_dict()[name].data.to(param.device) - param.data
+        for name, param in self.master_model.named_parameters():
+            param.grad = param.data - self.model.state_dict()[name].data.to('cpu')
 
     def _synchronize_master_model(self) -> None:
-        for name, param in self.master_model.named_parameters():
-            param.data = self.model.state_dict()[name].data.to("cpu")
+        for name, param in self.model.named_parameters():
+            param.data = self.master_model.state_dict()[name].data.to(param.device)
 
     def step(self):
         if self.gradient_config.max_norm:
