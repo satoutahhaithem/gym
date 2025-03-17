@@ -53,7 +53,7 @@ class LocalSimBuilder(SimBuilder):
         All ranks are assumed to be on the same machine, and device is defaulted to cpu.
         '''
         os.environ['MASTER_ADDR'] = 'localhost'
-        os.environ['MASTER_PORT'] = str(12355 + self.config.gpu_offset - (10 if self.config.device == 'cpu' else 0))
+        os.environ['MASTER_PORT'] = str(12355 + min(self.config.devices) - (10 if self.config.device == 'cpu' else 0))
 
         # initialize the process group
         if self.config.device_type == 'cuda':
