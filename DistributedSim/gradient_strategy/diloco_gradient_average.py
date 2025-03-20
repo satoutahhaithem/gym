@@ -15,14 +15,6 @@ class DiLoCoIslandGradient(GradientStrategy):
         self.local_step = 0
         self.island_size = self.gradient_config.island_size
 
-        device = next(model.parameters()).device
-        self.master_model = deepcopy(model).to(device)
-        for param in self.master_model.parameters():
-            param.requires_grad = True
-
-        self.outer_optimizer = self.gradient_config.outer_optimizer_cls(self.master_model.parameters(), 
-                                                                        **self.gradient_config.outer_optimizer_kwargs)
-
         self.optim = self.gradient_config.optimizer_class(model.parameters(), 
                                                           **self.gradient_config.optimizer_kwargs)
         self._setup_scheduler()
@@ -71,15 +63,6 @@ class DiLoCoIslandGradient(GradientStrategy):
             
             param.data = island_average
 
-    def _set_master_grad(self) -> None:
-        for name, param in self.master_model.named_parameters():
-            param.grad = param.data - self.model.state_dict()[name].data
-
-    def _synchronize_master_model(self) -> None:
-        # Save updated master model parameters to model.
-        for name, param in self.model.named_parameters():
-            param.data = self.master_model.state_dict()[name].data
-
     def step(self):
         if self.gradient_config.max_norm:
             nn_utils.clip_grad_norm_(self.model.parameters(), max_norm=self.gradient_config.max_norm)
@@ -90,14 +73,12 @@ class DiLoCoIslandGradient(GradientStrategy):
 
         # Outer step if needed.
         if self.local_step % self.gradient_config.diloco_interval == 0 and self.local_step > 0:
-            island_members = self._select_partners()
+            if self.island_size < self.gradient_config.num_nodes:
+                island_members = self._select_partners()
+            else:
+                island_members = list(range(self.gradient_config.num_nodes))
+
             self._average_models(island_members)
-
-            self.outer_optimizer.zero_grad()
-            self._set_master_grad()
-            self.outer_optimizer.step()
-
-            self._synchronize_master_model()
 
         super().step()
 
