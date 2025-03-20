@@ -20,6 +20,7 @@ def main():
     parser.add_argument('--outer_lr', type=float, default=0.7)
     parser.add_argument("--nesterov", type=bool, default=True)
     parser.add_argument("--outer_momentum", type=float, default=0.9)
+    parser.add_argument("--island_size", type=int, default=2)
 
     args = parser.parse_args()
 
@@ -36,6 +37,7 @@ def main():
         'nesterov': args.nesterov,
         'momentum': args.outer_momentum,
     }
+    config.gradient_config.island_size = args.island_size
 
     simbuilder = LocalSimBuilder(config)
 

@@ -13,6 +13,7 @@ class DiLoCoIslandGradient(GradientStrategy):
         super().__init__(rank, model, config, logger)
 
         self.local_step = 0
+        self.island_size = self.gradient_config.island_size
 
         device = next(model.parameters()).device
         self.master_model = deepcopy(model).to(device)
@@ -29,44 +30,46 @@ class DiLoCoIslandGradient(GradientStrategy):
     def _select_partners(self):
         world_size = dist.get_world_size()
         
-        # Only rank 0 creates the partner assignments.
-        partners = None
+        # Only rank 0 creates the island assignments
+        islands = None
         if self.rank == 0:
             # Create a list of all rank numbers and shuffle it.
             ranks = list(range(world_size))
             ## TODO: Switch to pytorch shuffle.
             random.shuffle(ranks)
-            
-            # Initialize partner list where index is the rank and value is its partner.
-            partners = [-1] * world_size
-            
-            # Pair off ranks in order.
-            while len(ranks) >= 2:
-                a = ranks.pop(0)
-                b = ranks.pop(0)
-                partners[a] = b
-                partners[b] = a
-            # If there's an odd number, one rank remains unpaired (indicated by -1).
-        
-        # Broadcast the partner list from rank 0 to all processes.
-        partners_list = [partners] if self.rank == 0 else [None]
-        dist.broadcast_object_list(partners_list, src=0)
-        partners = partners_list[0]
+        else:
+            ## TODO: Switch to pytorch broadcast.
+            ranks = [None] * world_size
 
-        print(f'Rank {self.rank} has partner {partners[self.rank]}')
-        
-        return partners[self.rank]
+        dist.broadcast_object_list(ranks, src=0)
 
-    def _average_models(self, partner_rank) -> None:
-        ## Average *local* model parameters
+        islands = []
+        for i in range(0, len(ranks), self.island_size):
+            islands.append(set(ranks[i:i+self.island_size]))
+        
+        # Ugh seems so unoptimal but it's fine for now.
+        my_island = None
+        for island in islands:
+            if self.rank in island:
+                my_island = island
+                break
+        
+        # print(f'Rank {self.rank} has partners {my_island}')
+        
+        return my_island
+
+    def _average_models(self, island_members) -> None:
+        ## Average model parameters across all members in the island
         for param in self.model.parameters():
+            ## At the moment we are doing a full all_gather - this will be optimized in a full-scale training implementation.
             tensor_list = [torch.zeros_like(param.data) for _ in range(self.config.num_nodes)]
             all_gather(tensor_list, param.data)
-            param.data = (tensor_list[self.rank] + tensor_list[partner_rank]) / 2
-
-    # def _set_master_grad(self) -> None:
-    #     for name, param in self.model.named_parameters():
-    #         param.grad = self.master_model.state_dict()[name].data.to(param.device) - param.data
+            
+            # Compute average only from ranks in the same island
+            island_tensors = [tensor_list[rank] for rank in island_members]
+            island_average = sum(island_tensors) / len(island_tensors)
+            
+            param.data = island_average
 
     def _set_master_grad(self) -> None:
         for name, param in self.master_model.named_parameters():
@@ -87,8 +90,8 @@ class DiLoCoIslandGradient(GradientStrategy):
 
         # Outer step if needed.
         if self.local_step % self.gradient_config.diloco_interval == 0 and self.local_step > 0:
-            partner_rank = self._select_partners()
-            self._average_models(partner_rank)
+            island_members = self._select_partners()
+            self._average_models(island_members)
 
             self.outer_optimizer.zero_grad()
             self._set_master_grad()
