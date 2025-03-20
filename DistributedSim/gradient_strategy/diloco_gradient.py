@@ -90,10 +90,10 @@ class DiLoCoIslandGradient(GradientStrategy):
 
         # Outer step if needed.
         if self.local_step % self.gradient_config.diloco_interval == 0 and self.local_step > 0:
-            if self.island_size < self.gradient_config.num_nodes:
+            if self.island_size < self.config.num_nodes:
                 island_members = self._select_partners()
             else:
-                island_members = list(range(self.gradient_config.num_nodes))
+                island_members = list(range(self.config.num_nodes))
 
             self._average_models(island_members)
 
