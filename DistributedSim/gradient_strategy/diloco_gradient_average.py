@@ -8,7 +8,7 @@ from torch.nn import utils as nn_utils
 from .gradient_strategy import GradientStrategy
 from .communicate import *
 
-class DiLoCoIslandGradient(GradientStrategy):
+class DiLoCoGradientAverage(GradientStrategy):
     def __init__(self, rank, model, config, logger=None):
         super().__init__(rank, model, config, logger)
 
@@ -73,10 +73,10 @@ class DiLoCoIslandGradient(GradientStrategy):
 
         # Outer step if needed.
         if self.local_step % self.gradient_config.diloco_interval == 0 and self.local_step > 0:
-            if self.island_size < self.gradient_config.num_nodes:
+            if self.island_size < self.config.num_nodes:
                 island_members = self._select_partners()
             else:
-                island_members = list(range(self.gradient_config.num_nodes))
+                island_members = list(range(self.config.num_nodes))
 
             self._average_models(island_members)
 
