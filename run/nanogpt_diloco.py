@@ -20,15 +20,18 @@ def main():
     parser.add_argument('--outer_lr', type=float, default=0.7)
     parser.add_argument("--nesterov", type=bool, default=True)
     parser.add_argument("--outer_momentum", type=float, default=0.9)
+    parser.add_argument("--island_size", type=int, default=None)
 
     args = parser.parse_args()
 
+    if args.island_size is None:
+        args.island_size = args.num_nodes
 
     gpt_config = gen_gpt_config(args)
 
     config = config_gen(args, gpt_config)
 
-    config.gradient_class = DiLoCoGradient
+    config.gradient_class = DiLoCoIslandGradient
     config.gradient_config.diloco_interval = args.diloco_interval
     config.gradient_config.outer_optimizer_cls = torch.optim.SGD
     config.gradient_config.outer_optimizer_kwargs = {
@@ -36,6 +39,7 @@ def main():
         'nesterov': args.nesterov,
         'momentum': args.outer_momentum,
     }
+    config.gradient_config.island_size = args.island_size
 
     simbuilder = LocalSimBuilder(config)
 
