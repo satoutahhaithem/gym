@@ -76,9 +76,9 @@ class DiLoCoIslandGradient(GradientStrategy):
             param.grad = param.data - self.model.state_dict()[name].data
 
     def _synchronize_master_model(self) -> None:
-        # Save updated master model parameters to model.
         for name, param in self.model.named_parameters():
-            param.data = self.master_model.state_dict()[name].data
+            param.data.copy_(self.master_model.state_dict()[name].data)
+
 
     def step(self):
         if self.gradient_config.max_norm:
