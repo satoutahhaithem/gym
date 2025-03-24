@@ -6,7 +6,7 @@ import numpy as np
 from DistributedSim.sim_builder import *
 from DistributedSim.sim_config import *
 from DistributedSim.gradient_strategy.gradient_strategy import *
-from DistributedSim.gradient_strategy.diloco_gradient import *
+from DistributedSim.gradient_strategy.diloco_island_gradient import *
 
 from DistributedSim.models.nanogpt import GPT, GPTConfig
 from DistributedSim.dataset.build_dataset import *
@@ -20,6 +20,7 @@ def main():
     parser.add_argument('--outer_lr', type=float, default=0.7)
     parser.add_argument("--nesterov", type=bool, default=True)
     parser.add_argument("--outer_momentum", type=float, default=0.9)
+    parser.add_argument("--island_size", type=int, default=None)
 
     args = parser.parse_args()
 
@@ -30,7 +31,7 @@ def main():
 
     config = config_gen(args, gpt_config)
 
-    config.gradient_class = DiLoCoGradient
+    config.gradient_class = DiLoCoIslandGradient
     config.gradient_config.diloco_interval = args.diloco_interval
     config.gradient_config.outer_optimizer_cls = torch.optim.SGD
     config.gradient_config.outer_optimizer_kwargs = {
@@ -38,6 +39,7 @@ def main():
         'nesterov': args.nesterov,
         'momentum': args.outer_momentum,
     }
+    config.gradient_config.island_size = args.island_size
 
     simbuilder = LocalSimBuilder(config)
 
