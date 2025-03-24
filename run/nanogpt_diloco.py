@@ -23,9 +23,6 @@ def main():
 
     args = parser.parse_args()
 
-    if args.island_size is None:
-        args.island_size = args.num_nodes
-
     gpt_config = gen_gpt_config(args)
 
     config = config_gen(args, gpt_config)

@@ -79,7 +79,6 @@ class DiLoCoIslandGradient(GradientStrategy):
         for name, param in self.model.named_parameters():
             param.data.copy_(self.master_model.state_dict()[name].data)
 
-
     def step(self):
         if self.gradient_config.max_norm:
             nn_utils.clip_grad_norm_(self.model.parameters(), max_norm=self.gradient_config.max_norm)

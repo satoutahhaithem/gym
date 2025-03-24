@@ -53,10 +53,14 @@ class LocalSimBuilder(SimBuilder):
         All ranks are assumed to be on the same machine, and device is defaulted to cpu.
         '''
         os.environ['MASTER_ADDR'] = 'localhost'
-        os.environ['MASTER_PORT'] = str(12355 + min(self.config.devices) - (10 if self.config.device == 'cpu' else 0))
+        os.environ['MASTER_PORT'] = str(12355 + (10 if self.config.device_type == 'cpu' else 0))
 
         # initialize the process group
         if self.config.device_type == 'cuda':
+            # If we haven't specified devices, use all devices.
+            if not self.config.devices:
+                self.config.devices = range(torch.cuda.device_count())
+
             dist.init_process_group("nccl" if len(self.config.devices) == self.config.num_nodes else "gloo", 
                                     rank=self.rank, 
                                     world_size=self.config.num_nodes)
@@ -73,7 +77,7 @@ class LocalSimBuilder(SimBuilder):
                                     world_size=self.config.num_nodes)
             self.device = torch.device("mps")
         else:
-            raise ValueError(f"Invalid device type: {self.config.device}")
+            raise ValueError(f"Invalid device type: {self.config.device_type}")
 
         print(f"Rank {self.rank} using device {self.device}")
 

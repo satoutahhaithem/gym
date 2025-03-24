@@ -16,7 +16,6 @@ class SimConfig:
                  gradient_config: dict = {},
                  eval_interval: int = 10,
                  gpu_offset: int = 0,
-                 device: str = 'cpu',
                  checkpoint_interval: int = 100,
                  diloco_interval: int = 1000,
                  **kwargs):
@@ -32,7 +31,6 @@ class SimConfig:
         self.gradient_config = gradient_config
         self.eval_interval = eval_interval
         self.gpu_offset = gpu_offset
-        self.device = device
         self.checkpoint_interval = checkpoint_interval
 
         # Allow additional kwargs to be set as attributes
