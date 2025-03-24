@@ -11,8 +11,6 @@ class DiLoCoGradient(GradientStrategy):
     def __init__(self, rank, model, config, logger=None):
         super().__init__(rank, model, config, logger)
 
-        self.local_step = 0
-
         if self.rank == 0:
             self.master_model = deepcopy(model).to("cpu")
             for param in self.master_model.parameters():
@@ -63,5 +61,3 @@ class DiLoCoGradient(GradientStrategy):
             self._broadcast_model_params()
 
         super().step()
-
-        self.local_step += 1

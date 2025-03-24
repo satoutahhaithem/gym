@@ -44,6 +44,8 @@ class GradientStrategy:
         # Initialize scheduler as None; will be set after self.optim is defined in subclasses.
         self.scheduler = None
 
+        self.local_step = 0
+
     # @abstractmethod
     def step(self):
         self.nbytes = 0
@@ -52,6 +54,8 @@ class GradientStrategy:
             self.scheduler.step()
             if self.rank == 0:
                 self.logger.log_lr(self.scheduler.get_last_lr()[0])
+
+        self.local_step += 1
 
     def zero_grad(self):
         self.optim.zero_grad()
