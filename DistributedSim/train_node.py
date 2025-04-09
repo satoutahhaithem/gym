@@ -296,9 +296,6 @@ class TrainNode:
             if self.local_step % self.config.eval_interval == 0:
                 self._evaluate()
             
-            # Calculate correlation if interval is set and it's time
-            if self.config.correlation_interval and self.local_step > 0 and self.local_step % self.config.correlation_interval == 0:
-                self._correlation_calculation()
 
             self._train_step()
 
@@ -308,6 +305,10 @@ class TrainNode:
 
             # if self.local_step == 5:
             #     break
+
+            # Calculate correlation if interval is set and it's time
+            if self.config.correlation_interval and self.local_step > 0 and self.local_step % self.config.correlation_interval == 0:
+                self._correlation_calculation()
 
             dist.barrier()
 
