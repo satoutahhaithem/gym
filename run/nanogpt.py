@@ -51,7 +51,7 @@ def arg_parse():
     parser.add_argument("--val_size", type=int, default=256)
     parser.add_argument("--dataset_proportion", type=float, default=1.0)
     parser.add_argument("--val_proportion", type=float, default=0.1)
-
+    parser.add_argument("--correlation_interval", type=int, default=None)
     return parser
 
 def gen_gpt_config(args):
@@ -88,6 +88,7 @@ def config_gen(args, gpt_config):
         eval_interval=args.eval_interval,
         dataset_proportion=args.dataset_proportion,
         val_proportion=args.val_proportion,
+        correlation_interval=args.correlation_interval,
 
         gradient_config=GradientConfig(
             optimizer_class=torch.optim.AdamW,
