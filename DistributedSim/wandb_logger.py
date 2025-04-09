@@ -42,6 +42,10 @@ class WandbLogger:
             self.current_lr = (self.config.gradient_config.optimizer_kwargs.get('lr', 0.0)
                             if self.config.gradient_config.optimizer_kwargs else 0.0)
 
+    def log(self, data: dict):
+        if hasattr(self, 'wandb_name'):
+            wandb.log(data, step=self.step)
+
     def log_pure(self, loss: float, name: str):
         if hasattr(self, 'wandb_name'):
             data = {
