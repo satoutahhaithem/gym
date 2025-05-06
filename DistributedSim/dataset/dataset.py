@@ -4,6 +4,7 @@ import boto3
 import io
 import os
 from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .build_dataset import build_dataset
 from .gpt_dataset import NonContiguousGPTTrainDataset, ContiguousGPTTrainDataset
@@ -41,6 +42,24 @@ def load_data(start_pc, end_pc):
         data.append(load_chunk(chunk_id, s3_client))
     return np.concatenate(data)
 
+def load_data_concurrent(start_pc, end_pc, max_workers=8):
+    s3_client = boto3.client('s3')
+    chunk_count = count_files_in_s3_folder('exo-datasets', 'owt/', s3_client)
+    chunk_ids = np.arange(chunk_count)
+    chunk_ids = chunk_ids[int(start_pc * chunk_count):int(end_pc * chunk_count)]
+
+    print(f'Importing {len(chunk_ids)} chunks in up to {max_workers} threads…')
+
+    data = []
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        # submit all jobs
+        futures = {pool.submit(load_chunk, int(cid), s3_client): cid for cid in chunk_ids}
+
+        # as each one completes, append its result
+        for f in tqdm(as_completed(futures), total=len(futures)):
+            data.append(f.result())
+
+    return np.concatenate(data)
 
 def get_dataset(dataset, start_pc, end_pc, block_size=1024, char=False, device=None):
     if dataset != 'owt':
@@ -49,7 +68,8 @@ def get_dataset(dataset, start_pc, end_pc, block_size=1024, char=False, device=N
         dataset = ContiguousGPTTrainDataset(data, block_size=block_size, device=device)
     else:
         # For OWT, pull from S3
-        data = load_data(start_pc, end_pc)
+        # data = load_data(start_pc, end_pc)
+        data = load_data_concurrent(start_pc, end_pc)
         vocab_size = 50257
 
         dataset = NonContiguousGPTTrainDataset(data, device=device)
