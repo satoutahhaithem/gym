@@ -21,6 +21,7 @@ def main():
     parser = arg_parse()
 
     parser.add_argument("--p_sparta", type=float, default=0.005)
+    parser.add_argument("--async_sparta_delay", type=int, default=0)
 
     args = parser.parse_args()
 
@@ -30,6 +31,7 @@ def main():
 
     config.gradient_class = SPARTAGradient
     config.gradient_config.p_sparta = args.p_sparta
+    config.gradient_config.async_sparta_delay = args.async_sparta_delay
 
     simbuilder = LocalSimBuilder(config)
 

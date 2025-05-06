@@ -18,7 +18,7 @@ class SPARTAGradient(GradientStrategy):
         # self.index_selector = RandomIndexSelector(self.gradient_config.p_sparta)
         self.index_selector = ShuffledSequentialIndexSelector(self.gradient_config.p_sparta)
         self.iteration = 0
-        # self.buffer = []
+        self.buffer = {} # Initialize as a dictionary for per-parameter buffers
 
     def step(self):
         if self.gradient_config.max_norm:
@@ -40,7 +40,20 @@ class SPARTAGradient(GradientStrategy):
                     sparse_data = param.data[indices_mask] # Get data using the mask
                     all_reduce(sparse_data, op=dist.ReduceOp.SUM) # This likely won't work as expected with masked, non-contiguous data
                     sparse_data /= dist.get_world_size()
-                    param.masked_scatter_(indices_mask, sparse_data) # Apply update using mask
+
+                    # Initialize buffer for this parameter if it doesn't exist
+                    if name not in self.buffer:
+                        self.buffer[name] = []
+                    
+                    # Add current sparse update to this parameter's buffer
+                    self.buffer[name].append((indices_mask, sparse_data))
+
+                    # If this parameter's buffer has exceeded the delay, apply the oldest update
+                    if len(self.buffer[name]) > self.gradient_config.async_sparta_delay:
+                        indices_popped, sparse_data_popped = self.buffer[name].pop(0)
+                        # Apply the popped update to the current parameter (param corresponds to name)
+                        param.masked_scatter_(indices_popped, sparse_data_popped)
+
 
         # Increment iteration AFTER potentially using it for gradient updates/communication
         self.iteration += 1
