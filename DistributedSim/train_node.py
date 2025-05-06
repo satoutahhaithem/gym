@@ -98,9 +98,10 @@ class TrainNode:
         self.val_data_iter = iter(self.val_dataloader)
 
     def _save_checkpoint(self):
+        print(self.config.save_dir, self.config.wandb_project, self.config.wandb_name, self.rank)
         save_path = os.path.join(self.config.save_dir, 
-                                 self.config.wandb_project, 
-                                 self.config.wandb_run_name if self.config.wandb_run_name else 'unnamed',
+                                 self.config.wandb_project if self.config.wandb_project else 'unnamed', 
+                                 self.config.wandb_name if self.config.wandb_name else 'unnamed',
                                  str(self.rank))
         if not os.path.exists(save_path):
             os.makedirs(save_path, exist_ok=True)
@@ -314,3 +315,6 @@ class TrainNode:
 
 
         self._evaluate()
+
+        if self.config.checkpoint_interval is not None:
+            self._save_checkpoint()
