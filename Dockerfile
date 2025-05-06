@@ -30,7 +30,12 @@ RUN python3.13 -m venv .venv && \
 RUN mkdir -p /var/run/sshd && \
     echo 'root:root' | chpasswd && \
     sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
-    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
+    echo 'UsePAM no' >> /etc/ssh/sshd_config
+
+# Create a bash profile to automatically start tmux and activate venv on login
+RUN echo 'if [ -z "$TMUX" ]; then\n  tmux new-session -s dev "cd /opt/DistributedSim && source .venv/bin/activate && bash"\nfi' > /root/.bash_profile && \
+    echo 'source /root/.bash_profile' >> /root/.bashrc
 
 # Expose SSH port
 EXPOSE 22
