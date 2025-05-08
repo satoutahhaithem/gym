@@ -81,5 +81,3 @@ class FedAvgGradient(GradientStrategy):
             self._average_models(island_members)
 
         super().step()
-
-        self.local_step += 1
