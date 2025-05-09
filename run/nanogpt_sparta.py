@@ -22,6 +22,8 @@ def main():
 
     parser.add_argument("--p_sparta", type=float, default=0.005)
     parser.add_argument("--async_sparta_delay", type=int, default=0)
+    parser.add_argument("--schedule_p", action='store_true')
+    parser.add_argument("--p_min_factor", type=float, default=0.1)
 
     args = parser.parse_args()
 
@@ -32,6 +34,8 @@ def main():
     config.gradient_class = SPARTAGradient
     config.gradient_config.p_sparta = args.p_sparta
     config.gradient_config.async_sparta_delay = args.async_sparta_delay
+    config.gradient_config.schedule_p = args.schedule_p
+    config.gradient_config.p_min_factor = args.p_min_factor
 
     simbuilder = LocalSimBuilder(config)
 

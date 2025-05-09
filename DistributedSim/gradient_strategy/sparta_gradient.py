@@ -20,12 +20,114 @@ class SPARTAGradient(GradientStrategy):
         self.iteration = 0
         self.buffer = {} # Initialize as a dictionary for per-parameter buffers
 
+        if self.gradient_config.schedule_p:
+            self._calculate_p_schedule_params()
+
+    def _calculate_p_schedule_params(self):
+        p_avg = self.gradient_config.p_sparta
+        p_min_target_factor = self.gradient_config.p_min_factor
+        
+        # Ensure warmup_steps and max_local_steps are available and valid
+        warmup_steps = float(getattr(self.gradient_config, 'warmup_steps', 0))
+        max_steps = float(getattr(self.gradient_config, 'max_local_steps', 1))
+
+        if max_steps <= 0:
+            self.p_sched_initial_value = p_avg 
+            self.p_sched_final_value = p_avg
+            if self.rank == 0 and hasattr(self.logger, 'log') and callable(self.logger.log):
+                self.logger.log({"sparta_p_schedule_warning": "max_steps <= 0, using constant p_avg"})
+            return
+
+        if warmup_steps < 0: warmup_steps = 0
+        if warmup_steps > max_steps: warmup_steps = max_steps
+
+        target_final_p = p_avg * p_min_target_factor
+
+        # Let T_w = warmup_steps, T_m = max_steps, T_a = max_steps - warmup_steps (anneal duration)
+        # p_avg * T_m = initial_p * T_w + (initial_p + target_final_p)/2 * T_a
+        # initial_p * (T_w + T_a/2) = p_avg * T_m - target_final_p * T_a / 2
+        # initial_p * ( (2*T_w + T_a)/2 ) = (2 * p_avg * T_m - target_final_p * T_a) / 2
+        # initial_p = (2 * p_avg * T_m - target_final_p * T_a) / (2 * T_w + T_a)
+        # Denominator: 2 * T_w + T_a = T_w + T_w + T_m - T_w = T_w + T_m
+        denominator = warmup_steps + max_steps
+        anneal_duration = max_steps - warmup_steps
+
+        if abs(denominator) < 1e-9: # Should be caught by max_steps <= 0, but as a safeguard
+            initial_p_candidate = p_avg
+        else:
+            initial_p_candidate = (2 * p_avg * max_steps - target_final_p * anneal_duration) / denominator
+        
+        calculated_final_p = target_final_p
+
+        if initial_p_candidate > 1.0:
+            self.p_sched_initial_value = 1.0
+            if anneal_duration <= 1e-9: 
+                calculated_final_p = self.p_sched_initial_value 
+            else:
+                # p_avg * T_m = 1.0 * T_w + (1.0 + final_p_recalc)/2 * T_a
+                # (2 * (p_avg * T_m - T_w) / T_a) - 1.0 = final_p_recalc
+                calculated_final_p = (2 * (p_avg * max_steps - warmup_steps) / anneal_duration) - 1.0
+        elif initial_p_candidate < 0.0:
+            self.p_sched_initial_value = 0.0
+            if anneal_duration <= 1e-9:
+                calculated_final_p = self.p_sched_initial_value
+            else:
+                # p_avg * T_m = 0.0 * T_w + (0.0 + final_p_recalc)/2 * T_a
+                # 2 * p_avg * T_m / T_a = final_p_recalc
+                calculated_final_p = (2 * p_avg * max_steps) / anneal_duration
+        else:
+            self.p_sched_initial_value = initial_p_candidate
+            # calculated_final_p remains target_final_p
+
+        self.p_sched_initial_value = min(1.0, max(0.0, self.p_sched_initial_value))
+        calculated_final_p = min(1.0, max(0.0, calculated_final_p))
+        
+        self.p_sched_final_value = min(calculated_final_p, self.p_sched_initial_value)
+
+        if self.rank == 0 and hasattr(self.logger, 'log') and callable(self.logger.log):
+            print(f"sparta_p_sched_initial: {self.p_sched_initial_value}, sparta_p_sched_final: {self.p_sched_final_value}, sparta_p_avg_target: {p_avg}")
+
+    def _get_current_p(self):
+        # Ensure warmup_steps and max_local_steps are available and valid
+        warmup_steps = float(getattr(self.gradient_config, 'warmup_steps', 0))
+        max_steps = float(getattr(self.gradient_config, 'max_local_steps', 1))
+        current_step = float(self.iteration)
+
+        if max_steps <= 0: return self.gradient_config.p_sparta # Should use calculated if available
+        if warmup_steps < 0: warmup_steps = 0
+        if warmup_steps > max_steps: warmup_steps = max_steps
+
+        initial_p = self.p_sched_initial_value
+        final_p = self.p_sched_final_value
+
+        if current_step < warmup_steps:
+            return initial_p
+        elif current_step < max_steps:
+            anneal_duration = max_steps - warmup_steps
+            if anneal_duration <= 1e-9: # Should be covered by current_step < warmup_steps or current_step >= max_steps
+                return initial_p # Or final_p, effectively constant during this phase
+            
+            progress = (current_step - warmup_steps) / anneal_duration
+            cosine_term = 0.5 * (1.0 + math.cos(math.pi * progress))
+            current_p_val = final_p + (initial_p - final_p) * cosine_term
+            return current_p_val
+        else: 
+            return final_p
+
     def step(self):
         if self.gradient_config.max_norm:
             norm = nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.gradient_config.max_norm)
             # print(f'Rank {self.rank}: Clipped grad norm to {norm}')
 
         self.optim.step()
+
+        if self.gradient_config.schedule_p:
+            current_p_for_comm = self._get_current_p()
+            self.index_selector.p = current_p_for_comm # Update p in index selector
+            if self.rank == 0 and hasattr(self.logger, 'log') and callable(self.logger.log):
+                self.logger.log({'sparta_p': current_p_for_comm})
+        else:
+            current_p_for_comm = self.gradient_config.p_sparta
 
         if self.config.num_nodes > 1:
             with torch.no_grad():
@@ -87,25 +189,32 @@ class ShuffledSequentialIndexSelector(IndexSelector):
         if num_total == 0:
             return torch.zeros_like(param, dtype=torch.bool)
 
-        # Initialize state for this parameter if not seen before
-        if param not in self.state:
-            num_partitions = max(1, math.ceil(1.0 / self.p)) # Ensure at least 1 partition
-            shuffled_indices = torch.randperm(num_total, device=param.device)
-            self.state[param] = {
-                "num_partitions": num_partitions,
-                "shuffled_indices": shuffled_indices,
-            }
+        # self.p is updated by SPARTAGradient before calling get_indices
+        # Handle p near zero to avoid division by zero or extreme num_partitions
+        if self.p <= 1e-9: 
+            return torch.zeros_like(param, dtype=torch.bool) # Select nothing if p is effectively zero
 
+        # num_partitions is calculated dynamically based on the current self.p
+        # Ensure self.p is positive before division
+        current_num_partitions = max(1, math.ceil(1.0 / self.p)) 
+
+        if param not in self.state:
+            # shuffled_indices are generated once per parameter and stored.
+            shuffled_indices_val = torch.randperm(num_total, device=param.device)
+            self.state[param] = {
+                "shuffled_indices": shuffled_indices_val,
+            }
+        
         param_state = self.state[param]
-        num_partitions = param_state["num_partitions"]
         shuffled_indices = param_state["shuffled_indices"]
 
         # Determine the current chunk based on the iteration number
-        current_chunk = iteration % num_partitions
+        # current_chunk must be less than current_num_partitions
+        current_chunk = iteration % current_num_partitions
 
         # Calculate chunk size and remainder for potentially uneven distribution
-        chunk_size = num_total // num_partitions
-        remainder = num_total % num_partitions
+        chunk_size = num_total // current_num_partitions
+        remainder = num_total % current_num_partitions
 
         # Calculate start and end indices for the current chunk
         start_index = current_chunk * chunk_size + min(current_chunk, remainder)
