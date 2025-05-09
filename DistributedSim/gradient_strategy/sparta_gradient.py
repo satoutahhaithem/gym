@@ -19,6 +19,7 @@ class SPARTAGradient(GradientStrategy):
         self.index_selector = ShuffledSequentialIndexSelector(self.gradient_config.p_sparta)
         self.iteration = 0
         self.buffer = {} # Initialize as a dictionary for per-parameter buffers
+        self.fault_rate = getattr(self.gradient_config, 'fault_rate', 0.0)
 
         if self.gradient_config.schedule_p:
             self._calculate_p_schedule_params()
@@ -129,33 +130,43 @@ class SPARTAGradient(GradientStrategy):
         else:
             current_p_for_comm = self.gradient_config.p_sparta
 
+        # Determine if a fault should be simulated for this round
+        simulate_fault_this_round = False
+        if self.config.num_nodes > 1 and self.fault_rate > 0:
+            if torch.rand(1).item() < self.fault_rate:
+                simulate_fault_this_round = True
+                if self.rank == 0 and hasattr(self.logger, 'log') and callable(self.logger.log):
+                    # Log that a fault is being simulated for this round
+                    self.logger.log({"sparta_event": "simulated_dropped_packets_this_round"})
+
         if self.config.num_nodes > 1:
-            with torch.no_grad():
-                for name, param in self.model.named_parameters():
-                    if not param.requires_grad or param.grad is None:
-                        continue
+            if not simulate_fault_this_round:
+                # Proceed with normal communication and updates if no fault is simulated
+                with torch.no_grad():
+                    for name, param in self.model.named_parameters():
+                        if not param.requires_grad or param.grad is None:
+                            continue
 
-                    indices_mask = self.index_selector.get_indices(param, self.iteration)
+                        indices_mask = self.index_selector.get_indices(param, self.iteration)
 
-                    ## TODO: Apparently this doesn't work well with non-contiguous data
-                    broadcast(indices_mask, src=0) # Broadcasting a mask might be needed
-                    sparse_data = param.data[indices_mask] # Get data using the mask
-                    all_reduce(sparse_data, op=dist.ReduceOp.SUM) # This likely won't work as expected with masked, non-contiguous data
-                    sparse_data /= dist.get_world_size()
+                        ## TODO: Apparently this doesn't work well with non-contiguous data
+                        broadcast(indices_mask, src=0) # Broadcasting a mask might be needed
+                        sparse_data = param.data[indices_mask] # Get data using the mask
+                        all_reduce(sparse_data, op=dist.ReduceOp.SUM) # This likely won't work as expected with masked, non-contiguous data
+                        sparse_data /= dist.get_world_size()
 
-                    # Initialize buffer for this parameter if it doesn't exist
-                    if name not in self.buffer:
-                        self.buffer[name] = []
-                    
-                    # Add current sparse update to this parameter's buffer
-                    self.buffer[name].append((indices_mask, sparse_data))
+                        # Initialize buffer for this parameter if it doesn't exist
+                        if name not in self.buffer:
+                            self.buffer[name] = []
+                        
+                        # Add current sparse update to this parameter's buffer
+                        self.buffer[name].append((indices_mask, sparse_data))
 
-                    # If this parameter's buffer has exceeded the delay, apply the oldest update
-                    if len(self.buffer[name]) > self.gradient_config.async_sparta_delay:
-                        indices_popped, sparse_data_popped = self.buffer[name].pop(0)
-                        # Apply the popped update to the current parameter (param corresponds to name)
-                        param.masked_scatter_(indices_popped, sparse_data_popped)
-
+                        # If this parameter's buffer has exceeded the delay, apply the oldest update
+                        if len(self.buffer[name]) > self.gradient_config.async_sparta_delay:
+                            indices_popped, sparse_data_popped = self.buffer[name].pop(0)
+                            # Apply the popped update to the current parameter (param corresponds to name)
+                            param.masked_scatter_(indices_popped, sparse_data_popped)
 
         # Increment iteration AFTER potentially using it for gradient updates/communication
         self.iteration += 1
