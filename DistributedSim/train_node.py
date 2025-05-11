@@ -63,7 +63,9 @@ class TrainNode:
 
         self.epoch = 0
         
-    
+        # Attempt to load checkpoint before starting training
+        self._load_checkpoint()
+
     def get_datasets(self):
         ## Import Datasets
         dataset_id = self.config.dataset_name.split('_')[0]
@@ -99,15 +101,31 @@ class TrainNode:
 
     def _save_checkpoint(self):
         print(self.config.save_dir, self.config.wandb_project, self.config.wandb_name, self.rank)
-        save_path = os.path.join(self.config.save_dir, 
-                                 self.config.wandb_project if self.config.wandb_project else 'unnamed', 
+        save_path_dir = os.path.join(self.config.save_dir,
+                                 self.config.wandb_project if self.config.wandb_project else 'unnamed',
                                  self.config.wandb_name if self.config.wandb_name else 'unnamed',
                                  str(self.rank))
-        if not os.path.exists(save_path):
-            os.makedirs(save_path, exist_ok=True)
+        if not os.path.exists(save_path_dir):
+            os.makedirs(save_path_dir, exist_ok=True)
 
         filename = f"{self.local_step}.pt"
-        torch.save(self.model.state_dict(), os.path.join(save_path, filename))
+        full_save_path = os.path.join(save_path_dir, filename)
+
+        checkpoint = {
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.gradient_strategy.optim.state_dict(),
+            'local_step': self.local_step,
+            'epoch': self.epoch,
+            'rng_state': torch.get_rng_state(),
+        }
+        if self.gradient_strategy.scheduler is not None:
+            checkpoint['scheduler_state_dict'] = self.gradient_strategy.scheduler.state_dict()
+        
+        if self.device.type == 'cuda':
+            checkpoint['cuda_rng_state'] = torch.cuda.get_rng_state()
+
+        torch.save(checkpoint, full_save_path)
+        print(f"Rank {self.rank} saved checkpoint to {full_save_path} at step {self.local_step}")
 
     def _get_batch(self, eval=False):
         if not eval or self.val_data_iter is None:
@@ -291,6 +309,84 @@ class TrainNode:
         torch.distributed.barrier()
 
         return corr_value # Only rank 0 returns a value, others return None
+
+    def _load_checkpoint(self):
+        save_path_dir = os.path.join(self.config.save_dir,
+                                 self.config.wandb_project if self.config.wandb_project else 'unnamed',
+                                 self.config.wandb_name if self.config.wandb_name else 'unnamed',
+                                 str(self.rank))
+
+        if not os.path.exists(save_path_dir):
+            print(f"Rank {self.rank}: Checkpoint directory {save_path_dir} not found. Starting from scratch.")
+            return False
+
+        latest_step = -1
+        latest_checkpoint_file = None
+        for f_name in os.listdir(save_path_dir):
+            if f_name.endswith('.pt'):
+                try:
+                    step_num = int(f_name.split('.')[0])
+                    if step_num > latest_step:
+                        latest_step = step_num
+                        latest_checkpoint_file = f_name
+                except ValueError:
+                    # Not a valid checkpoint file name
+                    continue
+        
+        if latest_checkpoint_file is None:
+            print(f"Rank {self.rank}: No checkpoint found in {save_path_dir}. Starting from scratch.")
+            return False
+
+        full_checkpoint_path = os.path.join(save_path_dir, latest_checkpoint_file)
+        print(f"Rank {self.rank}: Loading checkpoint from {full_checkpoint_path}")
+        checkpoint = torch.load(full_checkpoint_path, map_location=self.device)
+
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.gradient_strategy.optim.load_state_dict(checkpoint['optimizer_state_dict'])
+        
+        if 'scheduler_state_dict' in checkpoint and self.gradient_strategy.scheduler is not None:
+            self.gradient_strategy.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        
+        self.local_step = checkpoint['local_step']
+        self.epoch = checkpoint['epoch']
+        
+        torch.set_rng_state(checkpoint['rng_state'].cpu()) # Ensure RNG state is on CPU before loading
+        if self.device.type == 'cuda' and 'cuda_rng_state' in checkpoint:
+             # Ensure CUDA RNG state is loaded to the correct device if necessary, or just load from CPU tensor
+            if isinstance(checkpoint['cuda_rng_state'], torch.Tensor):
+                torch.cuda.set_rng_state(checkpoint['cuda_rng_state'].cpu(), device=self.device) 
+            else: # backward compatibility or other formats
+                torch.cuda.set_rng_state(checkpoint['cuda_rng_state'], device=self.device)
+
+        # Re-initialize data iterators. RNG state is now restored.
+        self.train_data_iter = iter(self.train_dataloader)
+        self.val_data_iter = iter(self.val_dataloader)
+
+        # Fast-forward the training iterator to the correct batch in the current epoch
+        # This ensures that training resumes from the exact point it left off.
+        if len(self.train_dataloader) > 0: # Avoid division by zero if dataloader is empty
+            batches_to_skip = self.local_step % len(self.train_dataloader)
+            print(f"Rank {self.rank}: Restored to epoch {self.epoch}, step {self.local_step}. Skipping {batches_to_skip} batches in current epoch.")
+            for _ in range(batches_to_skip):
+                try:
+                    next(self.train_data_iter)
+                except StopIteration:
+                    # This should ideally not happen if epoch and local_step are consistent
+                    # and dataloader length hasn't changed drastically.
+                    print(f"Rank {self.rank}: Warning - StopIteration while fast-forwarding train_data_iter.")
+                    break 
+        else:
+            print(f"Rank {self.rank}: Restored to epoch {self.epoch}, step {self.local_step}. Train dataloader is empty, no batches to skip.")
+
+        if self.rank == 0 and hasattr(self.logger, 'set_step'):
+             self.logger.set_step(self.local_step) # Optional: if your logger needs explicit step setting
+        elif self.rank == 0:
+            # If WandbLogger relies on an internal step counter that is not directly part of wandb.log(step=...)
+            # you might need to re-initialize or adjust it. For now, we assume wandb.log(step=local_step) is used.
+            print(f"Rank 0: Logger step will resume from loaded local_step: {self.local_step}")
+
+        print(f"Rank {self.rank}: Successfully loaded checkpoint. Resuming at epoch {self.epoch}, step {self.local_step}.")
+        return True
 
     def train(self):
         while self.local_step < self.max_steps:
