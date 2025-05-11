@@ -57,7 +57,7 @@ class DiLoCoSPARTAGradient(GradientStrategy):
                     if not param.requires_grad:
                         continue
 
-                    indices = self.index_selector.get_indices(param)
+                    indices = self.index_selector.get_indices(param, self.local_step)
                     broadcast(indices, src=0)
                     sparse_data = param.data[indices]
                     all_reduce(sparse_data, op=dist.ReduceOp.SUM)
