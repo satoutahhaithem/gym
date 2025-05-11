@@ -127,6 +127,7 @@ class TrainNode:
         try:
             torch.save(checkpoint, full_save_path)
             print(f"Rank {self.rank} saved checkpoint to {full_save_path} at step {self.local_step}")
+            self._delete_other_checkpoints(save_path_dir, full_save_path)
         except OSError as e:
             print(f"Rank {self.rank}: Failed to save checkpoint {full_save_path} due to OSError: {e}. Attempting to delete oldest checkpoint and retry.")
             
@@ -156,6 +157,7 @@ class TrainNode:
                     try:
                         torch.save(checkpoint, full_save_path)
                         print(f"Rank {self.rank}: Successfully saved checkpoint {full_save_path} after deleting oldest.")
+                        self._delete_other_checkpoints(save_path_dir, full_save_path)
                     except OSError as e2:
                         print(f"Rank {self.rank}: Still failed to save checkpoint {full_save_path} after deleting oldest: {e2}. Giving up.")
                         raise # Re-raise the second error, as we couldn't save even after cleanup
@@ -165,6 +167,24 @@ class TrainNode:
             else:
                 print(f"Rank {self.rank}: No old checkpoints found to delete in {save_path_dir}. Original save error will be raised.")
                 raise e # Re-raise the original save error, as no space could be freed
+
+    def _delete_other_checkpoints(self, save_path_dir: str, current_checkpoint_full_path: str):
+        if not os.path.exists(save_path_dir):
+            return
+
+        current_checkpoint_filename = os.path.basename(current_checkpoint_full_path)
+        deleted_count = 0
+        for f_name in os.listdir(save_path_dir):
+            if f_name.endswith('.pt') and f_name != current_checkpoint_filename:
+                try:
+                    file_to_delete = os.path.join(save_path_dir, f_name)
+                    os.remove(file_to_delete)
+                    # print(f"Rank {self.rank}: Deleted old checkpoint {file_to_delete}")
+                    deleted_count += 1
+                except OSError as del_e:
+                    print(f"Rank {self.rank}: Warning - Failed to delete old checkpoint {file_to_delete}: {del_e}")
+        if deleted_count > 0:
+            print(f"Rank {self.rank}: Deleted {deleted_count} other checkpoint(s) in {save_path_dir}.")
 
     def _get_batch(self, eval=False):
         if not eval or self.val_data_iter is None:
