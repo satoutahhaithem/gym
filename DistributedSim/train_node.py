@@ -2,6 +2,7 @@ import torch
 import torch.distributed as dist
 from torch.utils.data import DataLoader
 import numpy as np
+import zipfile
 
 import os
 import copy
@@ -379,72 +380,84 @@ class TrainNode:
             print(f"Rank {self.rank}: Checkpoint directory {save_path_dir} not found. Starting from scratch.")
             return False
 
-        latest_step = -1
-        latest_checkpoint_file = None
+        checkpoint_files = []
         for f_name in os.listdir(save_path_dir):
             if f_name.endswith('.pt'):
                 try:
                     step_num = int(f_name.split('.')[0])
-                    if step_num > latest_step:
-                        latest_step = step_num
-                        latest_checkpoint_file = f_name
+                    checkpoint_files.append((step_num, f_name))
                 except ValueError:
-                    # Not a valid checkpoint file name
+                    # Not a valid checkpoint file name pattern
                     continue
         
-        if latest_checkpoint_file is None:
-            print(f"Rank {self.rank}: No checkpoint found in {save_path_dir}. Starting from scratch.")
-            return False
+        # Sort by step number in descending order (latest first)
+        checkpoint_files.sort(key=lambda x: x[0], reverse=True)
 
-        full_checkpoint_path = os.path.join(save_path_dir, latest_checkpoint_file)
-        print(f"Rank {self.rank}: Loading checkpoint from {full_checkpoint_path}")
-        checkpoint = torch.load(full_checkpoint_path, map_location=self.device)
+        loaded_successfully = False
+        for step_num, f_name in checkpoint_files:
+            full_checkpoint_path = os.path.join(save_path_dir, f_name)
+            try:
+                print(f"Rank {self.rank}: Attempting to load checkpoint from {full_checkpoint_path}")
+                checkpoint = torch.load(full_checkpoint_path, map_location=self.device)
 
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.gradient_strategy.optim.load_state_dict(checkpoint['optimizer_state_dict'])
-        
-        if 'scheduler_state_dict' in checkpoint and self.gradient_strategy.scheduler is not None:
-            self.gradient_strategy.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        
-        self.local_step = checkpoint['local_step']
-        self.epoch = checkpoint['epoch']
-        
-        torch.set_rng_state(checkpoint['rng_state'].cpu()) # Ensure RNG state is on CPU before loading
-        if self.device.type == 'cuda' and 'cuda_rng_state' in checkpoint:
-             # Ensure CUDA RNG state is loaded to the correct device if necessary, or just load from CPU tensor
-            if isinstance(checkpoint['cuda_rng_state'], torch.Tensor):
-                torch.cuda.set_rng_state(checkpoint['cuda_rng_state'].cpu(), device=self.device) 
-            else: # backward compatibility or other formats
-                torch.cuda.set_rng_state(checkpoint['cuda_rng_state'], device=self.device)
+                self.model.load_state_dict(checkpoint['model_state_dict'])
+                self.gradient_strategy.optim.load_state_dict(checkpoint['optimizer_state_dict'])
+                
+                if 'scheduler_state_dict' in checkpoint and self.gradient_strategy.scheduler is not None:
+                    self.gradient_strategy.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+                
+                self.local_step = checkpoint['local_step']
+                self.epoch = checkpoint['epoch']
+                
+                torch.set_rng_state(checkpoint['rng_state'].cpu()) # Ensure RNG state is on CPU before loading
+                if self.device.type == 'cuda' and 'cuda_rng_state' in checkpoint:
+                    if isinstance(checkpoint['cuda_rng_state'], torch.Tensor):
+                        torch.cuda.set_rng_state(checkpoint['cuda_rng_state'].cpu(), device=self.device) 
+                    else:
+                        torch.cuda.set_rng_state(checkpoint['cuda_rng_state'], device=self.device)
 
-        # Re-initialize data iterators. RNG state is now restored.
-        self.train_data_iter = iter(self.train_dataloader)
-        self.val_data_iter = iter(self.val_dataloader)
+                self.train_data_iter = iter(self.train_dataloader)
+                self.val_data_iter = iter(self.val_dataloader)
 
-        # Fast-forward the training iterator to the correct batch in the current epoch
-        # This ensures that training resumes from the exact point it left off.
-        if len(self.train_dataloader) > 0: # Avoid division by zero if dataloader is empty
-            batches_to_skip = self.local_step % len(self.train_dataloader)
-            print(f"Rank {self.rank}: Restored to epoch {self.epoch}, step {self.local_step}. Skipping {batches_to_skip} batches in current epoch.")
-            for _ in range(batches_to_skip):
+                if len(self.train_dataloader) > 0:
+                    batches_to_skip = self.local_step % len(self.train_dataloader)
+                    print(f"Rank {self.rank}: Restored to epoch {self.epoch}, step {self.local_step}. Skipping {batches_to_skip} batches.")
+                    for _ in range(batches_to_skip):
+                        try:
+                            next(self.train_data_iter)
+                        except StopIteration:
+                            print(f"Rank {self.rank}: Warning - StopIteration while fast-forwarding train_data_iter.")
+                            break 
+                else:
+                    print(f"Rank {self.rank}: Restored to epoch {self.epoch}, step {self.local_step}. Train dataloader empty.")
+
+                if self.rank == 0 and hasattr(self.logger, 'set_step'):
+                    self.logger.set_step(self.local_step)
+                elif self.rank == 0:
+                    print(f"Rank 0: Logger step will resume from loaded local_step: {self.local_step}")
+
+                print(f"Rank {self.rank}: Successfully loaded checkpoint {f_name}. Resuming at epoch {self.epoch}, step {self.local_step}.")
+                loaded_successfully = True
+                break # Exit loop once a checkpoint is successfully loaded
+            except (RuntimeError, EOFError, zipfile.BadZipFile) as e: # Catch specific errors related to corrupted files
+                print(f"Rank {self.rank}: Failed to load checkpoint {full_checkpoint_path}: {e}. Trying next available checkpoint.")
+                # Optionally, delete the corrupted checkpoint file
                 try:
-                    next(self.train_data_iter)
-                except StopIteration:
-                    # This should ideally not happen if epoch and local_step are consistent
-                    # and dataloader length hasn't changed drastically.
-                    print(f"Rank {self.rank}: Warning - StopIteration while fast-forwarding train_data_iter.")
-                    break 
-        else:
-            print(f"Rank {self.rank}: Restored to epoch {self.epoch}, step {self.local_step}. Train dataloader is empty, no batches to skip.")
+                    os.remove(full_checkpoint_path)
+                    print(f"Rank {self.rank}: Deleted corrupted checkpoint {full_checkpoint_path}.")
+                except OSError as del_e:
+                    print(f"Rank {self.rank}: Warning - Failed to delete corrupted checkpoint {full_checkpoint_path}: {del_e}")
+            except Exception as e: # Catch any other unexpected error during loading
+                print(f"Rank {self.rank}: An unexpected error occurred while loading checkpoint {full_checkpoint_path}: {e}. Trying next.")
+                # Optionally, delete or move the problematic checkpoint
 
-        if self.rank == 0 and hasattr(self.logger, 'set_step'):
-             self.logger.set_step(self.local_step) # Optional: if your logger needs explicit step setting
-        elif self.rank == 0:
-            # If WandbLogger relies on an internal step counter that is not directly part of wandb.log(step=...)
-            # you might need to re-initialize or adjust it. For now, we assume wandb.log(step=local_step) is used.
-            print(f"Rank 0: Logger step will resume from loaded local_step: {self.local_step}")
-
-        print(f"Rank {self.rank}: Successfully loaded checkpoint. Resuming at epoch {self.epoch}, step {self.local_step}.")
+        if not loaded_successfully:
+            print(f"Rank {self.rank}: No valid checkpoint found in {save_path_dir} after trying all options. Starting from scratch.")
+            # Reset relevant states if starting from scratch, though __init__ defaults should cover this.
+            self.local_step = 0 
+            self.epoch = 0
+            return False
+        
         return True
 
     def train(self):
