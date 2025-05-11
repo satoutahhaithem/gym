@@ -124,8 +124,47 @@ class TrainNode:
         if self.device.type == 'cuda':
             checkpoint['cuda_rng_state'] = torch.cuda.get_rng_state()
 
-        torch.save(checkpoint, full_save_path)
-        print(f"Rank {self.rank} saved checkpoint to {full_save_path} at step {self.local_step}")
+        try:
+            torch.save(checkpoint, full_save_path)
+            print(f"Rank {self.rank} saved checkpoint to {full_save_path} at step {self.local_step}")
+        except OSError as e:
+            print(f"Rank {self.rank}: Failed to save checkpoint {full_save_path} due to OSError: {e}. Attempting to delete oldest checkpoint and retry.")
+            
+            oldest_step = float('inf')
+            oldest_checkpoint_file = None
+            # Ensure save_path_dir exists before listing its contents, though it should have been created.
+            if os.path.exists(save_path_dir):
+                for f_name in os.listdir(save_path_dir):
+                    if f_name.endswith('.pt'):
+                        try:
+                            # Checkpoints are named as {step_num}.pt
+                            step_num = int(f_name.split('.')[0])
+                            if step_num < oldest_step:
+                                oldest_step = step_num
+                                oldest_checkpoint_file = f_name
+                        except ValueError:
+                            # Skip files not matching the expected N.pt pattern
+                            continue
+            
+            if oldest_checkpoint_file:
+                oldest_checkpoint_path = os.path.join(save_path_dir, oldest_checkpoint_file)
+                try:
+                    os.remove(oldest_checkpoint_path)
+                    print(f"Rank {self.rank}: Deleted oldest checkpoint {oldest_checkpoint_path} to free space.")
+                    
+                    # Retry saving the current checkpoint
+                    try:
+                        torch.save(checkpoint, full_save_path)
+                        print(f"Rank {self.rank}: Successfully saved checkpoint {full_save_path} after deleting oldest.")
+                    except OSError as e2:
+                        print(f"Rank {self.rank}: Still failed to save checkpoint {full_save_path} after deleting oldest: {e2}. Giving up.")
+                        raise # Re-raise the second error, as we couldn't save even after cleanup
+                except OSError as del_e:
+                    print(f"Rank {self.rank}: Failed to delete oldest checkpoint {oldest_checkpoint_path}: {del_e}. Original save error will be raised.")
+                    raise e # Re-raise the original save error, as cleanup failed
+            else:
+                print(f"Rank {self.rank}: No old checkpoints found to delete in {save_path_dir}. Original save error will be raised.")
+                raise e # Re-raise the original save error, as no space could be freed
 
     def _get_batch(self, eval=False):
         if not eval or self.val_data_iter is None:
