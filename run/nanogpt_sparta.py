@@ -39,10 +39,10 @@ def main():
     config.gradient_config.p_min_factor = args.p_min_factor
     config.gradient_config.fault_rate = args.fault_rate
 
-    config.gradient_config.param_weights = {
-        'mlp.':1.25,
-        'attn.':0.75,
-    }
+    # config.gradient_config.param_weights = {
+    #     'mlp.':1.25,
+    #     'attn.':0.75,
+    # }
 
     simbuilder = LocalSimBuilder(config)
 
