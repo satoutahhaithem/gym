@@ -16,7 +16,17 @@ class SPARTAGradient(GradientStrategy):
 
         # self.index_selector = PartitionedIndexSelector(self.gradient_config.p_sparta)
         # self.index_selector = RandomIndexSelector(self.gradient_config.p_sparta)
-        self.index_selector = ShuffledSequentialIndexSelector(self.gradient_config.p_sparta)
+        # self.index_selector = ShuffledSequentialIndexSelector(self.gradient_config.p_sparta)
+
+        print(self.gradient_config.__dict__)        
+
+        if hasattr(self.gradient_config, 'param_weights'):
+            print('weighted!')
+            self.index_selector = RandomWeightedIndexSelector(self.gradient_config.p_sparta, self.gradient_config.param_weights, model)
+        else:
+            print('unweighted :(')
+            self.index_selector = ShuffledSequentialIndexSelector(self.gradient_config.p_sparta)
+
         self.iteration = 0
         self.buffer = {} # Initialize as a dictionary for per-parameter buffers
         self.fault_rate = getattr(self.gradient_config, 'fault_rate', 0.0)
@@ -130,16 +140,28 @@ class SPARTAGradient(GradientStrategy):
         else:
             current_p_for_comm = self.gradient_config.p_sparta
 
-        # Determine if a fault should be simulated for this round
-        simulate_fault_this_round = False
-        if self.config.num_nodes > 1 and self.fault_rate > 0:
-            if torch.rand(1).item() < self.fault_rate:
-                simulate_fault_this_round = True
-                if self.rank == 0 and hasattr(self.logger, 'log') and callable(self.logger.log):
-                    # Log that a fault is being simulated for this round
-                    self.logger.log({"sparta_event": "simulated_dropped_packets_this_round"})
+        simulate_fault_this_round = False # Initialize default
 
         if self.config.num_nodes > 1:
+            # Synchronized decision for fault simulation
+            # Ensure the decision tensor is on the same device as model parameters
+            device = next(self.model.parameters()).device 
+            decision_tensor = torch.zeros(1, dtype=torch.float32, device=device) # 0.0 for no fault, 1.0 for fault
+
+            if self.rank == 0:
+                if self.fault_rate > 0.0 and torch.rand(1).item() < self.fault_rate:
+                    decision_tensor[0] = 1.0 # Mark for fault simulation
+            
+            # Broadcast the decision from rank 0 to all other ranks.
+            # This is a collective operation and MUST be called by all ranks in the group.
+            broadcast(decision_tensor, src=0) 
+            
+            # All ranks now have the same decision
+            if decision_tensor.item() == 1.0:
+                simulate_fault_this_round = True
+            
+            # The following conditional block, modified by the user, will now execute
+            # synchronously based on the globally decided 'simulate_fault_this_round'.
             if not simulate_fault_this_round:
                 # Proceed with normal communication and updates if no fault is simulated
                 with torch.no_grad():
@@ -182,11 +204,108 @@ class IndexSelector:
         # Default implementation returns all indices (mask of Trues)
         return torch.ones_like(param, dtype=torch.bool)
 
-
 class RandomIndexSelector(IndexSelector):
-    # Update signature to match base class
     def get_indices(self, param, iteration):
         return torch.bernoulli(torch.full(param.shape, self.p, device=param.device)).bool()
+class RandomWeightedIndexSelector(IndexSelector):
+  def __init__(self, p_base, param_weights, model):
+    """
+    Initializes the RandomWeightedIndexSelector.
+
+    Args:
+      p_base (float): The base probability for an element to be selected,
+                      if all weights were 1.0. This is the target average
+                      proportion of elements to be selected across the entire model.
+      param_weights (dict): A dictionary where keys are substrings of parameter names
+                            (e.g., 'encoder', 'layer.0.weight') and values are
+                            multiplicative weights for those parameters' selection
+                            probabilities. Parameters not matching any key get a
+                            default weight of 1.0. More specific (longer) keys
+                            are prioritized if names match multiple keys.
+      model (torch.nn.Module): The model whose parameters will be sampled.
+    """
+    super().__init__(p_base)  # Initializes self.p = p_base and self.state = {}
+    self.p_base = p_base
+    self._param_probs = {}  # Stores param_id -> calculated_probability
+
+    parameter_details = []
+    total_numel_model = 0
+
+    # Collect details for each parameter
+    for name, param in model.named_parameters():
+      if param.numel() == 0:  # Skip zero-element tensors
+        continue
+      
+      total_numel_model += param.numel()
+      
+      current_param_weight = 1.0  # Default weight
+      
+      effective_param_weights = param_weights if param_weights is not None else {}
+
+      # Determine weight: prefer longer (more specific) key matches
+      # Sort keys by length (descending)
+      sorted_weight_keys = sorted(effective_param_weights.keys(), key=len, reverse=True)
+
+      for key_pattern in sorted_weight_keys:
+        if key_pattern in name:
+          current_param_weight = effective_param_weights[key_pattern]
+          break  # Found the most specific match
+      
+      parameter_details.append({
+        'name': name, 
+        'param': param,
+        'weight': current_param_weight,
+        'numel': param.numel()
+      })
+
+    sum_of_weighted_numels = 0.0
+    for detail in parameter_details:
+      sum_of_weighted_numels += detail['weight'] * detail['numel']
+
+    normalization_factor_C = 1.0
+    if total_numel_model > 0:
+      if abs(sum_of_weighted_numels) > 1e-9: # Avoid division by zero or instability
+        normalization_factor_C = total_numel_model / sum_of_weighted_numels
+      # If sum_of_weighted_numels is zero (e.g. all weights are zero), C remains 1.0.
+      # p_param_specific will become p_base * weight * 1.0. If weight is 0, prob is 0.
+
+    for detail in parameter_details:
+      param = detail['param']
+      weight = detail['weight']
+      
+      p_param_specific = self.p_base * weight * normalization_factor_C
+      p_param_specific = max(0.0, min(1.0, p_param_specific)) # Clamp to [0, 1]
+      
+      self._param_probs[id(param)] = p_param_specific
+
+  def get_indices(self, param, iteration):
+    """
+    Gets a boolean mask for selecting indices from a given parameter.
+
+    Args:
+      param (torch.Tensor): The parameter tensor for which to generate a mask.
+      iteration (int): The current training iteration (unused by this selector).
+
+    Returns:
+      torch.Tensor: A boolean tensor of the same shape as `param`, where True
+                    indicates an element should be selected.
+    """
+    if param.numel() == 0:
+      return torch.zeros_like(param, dtype=torch.bool)
+
+    param_id = id(param)
+    
+    if param_id not in self._param_probs:
+      # Fallback for params not found (e.g. if model changed post-init)
+      return torch.zeros_like(param, dtype=torch.bool)
+    
+    p_for_this_param = self._param_probs[param_id]
+    
+    prob_tensor = torch.full_like(param, 
+                                  fill_value=float(p_for_this_param), 
+                                  dtype=torch.float32, 
+                                  device=param.device)
+    return torch.bernoulli(prob_tensor).bool()
 
 class ShuffledSequentialIndexSelector(IndexSelector):
     def __init__(self, p):
