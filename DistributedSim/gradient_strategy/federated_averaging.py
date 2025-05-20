@@ -20,6 +20,9 @@ class FedAvgGradient(GradientStrategy):
         self._setup_scheduler()
 
     def _select_partners(self):
+        """
+        Selects partners for goruped Federated Averaging. By default not used.
+        """
         world_size = dist.get_world_size()
         
         # Only rank 0 creates the island assignments

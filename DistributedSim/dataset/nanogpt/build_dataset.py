@@ -20,7 +20,7 @@ def generate_char_vocab():
     eos_token_id = char_int[eos_token]
     return char_int, eos_token_id
 
-def build_dataset(dataset, block_size=1024, char=False, start_pc=0.0, end_pc=1.0):
+def build_dataset(dataset, block_size=1024, start_pc=0.0, end_pc=1.0):
     """
     Loads and preprocesses the dataset with caching, using either a custom character-level tokenizer
     or the GPT2 tokenizer. It uses only a fraction of the full dataset, as controlled by dataset_proportion,
@@ -34,6 +34,13 @@ def build_dataset(dataset, block_size=1024, char=False, start_pc=0.0, end_pc=1.0
         start_pc (float): The start percentage of the dataset to use.
         end_pc (float): The end percentage of the dataset to use.
     """
+    if dataset == 'shakespeare':
+        char = True
+    else:
+        char = False    
+
+    print(start_pc, end_pc)
+
     # Decide cache locations based on tokenization mode and rank.
     if char:
         cache_dir = os.path.join("cache", f"{dataset}_char")

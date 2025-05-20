@@ -9,6 +9,9 @@ from .gradient_strategy import GradientStrategy
 from .communicate import *
 
 class DiLoCoSPARTAGradient(GradientStrategy):
+    """
+    DiLoCo outer optimizer with SPARTA updates at every step
+    """
     def __init__(self, rank, model, config, logger=None):
         super().__init__(rank, model, config, logger)
 

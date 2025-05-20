@@ -7,3 +7,4 @@ DistributedSim.egg-info/
 cache/
 remote/
 results/
+*.DS_Store

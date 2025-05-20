@@ -8,7 +8,9 @@ from DistributedSim.sim_config import *
 from DistributedSim.gradient_strategy.gradient_strategy import *
 
 from DistributedSim.models.nanogpt import GPT, GPTConfig
-from DistributedSim.dataset.build_dataset import *
+from DistributedSim.dataset.nanogpt.build_dataset import *
+from DistributedSim.dataset.nanogpt.dataset import get_dataset
+from DistributedSim.dataset.dataset import DatasetConfig
 
 def gen_wandb_name(args):
     name = f"bs{args.batch_size}_lr{args.lr:.0e}_warm{args.warmup_steps}_max{args.max_steps}"
@@ -22,11 +24,12 @@ def arg_parse():
         "--dataset", type=str, default="shakespeare", 
         help="which dataset to use (shakespeare, wikitext, code, owt)"
     )
-    parser.add_argument('--char_dataset', action='store_true')
+    parser.add_argument("--start_pc", type=float, default=0.0)
+    parser.add_argument("--end_pc", type=float, default=1.0)
     parser.add_argument("--block_size", type=int, default=1024)
 
     parser.add_argument("--num_nodes", type=int, default=1)
-    parser.add_argument("--device_type", type=str, default="cuda")
+    parser.add_argument("--device_type", type=str, default="")
     parser.add_argument("--devices", type=int, nargs="+", default=None)
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument(
@@ -52,6 +55,7 @@ def arg_parse():
     parser.add_argument("--dataset_proportion", type=float, default=1.0)
     parser.add_argument("--val_proportion", type=float, default=0.1)
     parser.add_argument("--correlation_interval", type=int, default=None)
+
     return parser
 
 def gen_gpt_config(args):
@@ -77,9 +81,6 @@ def config_gen(args, gpt_config):
         devices=args.devices,
         autocast=args.autocast,
 
-        dataset_name=f'{args.dataset}_char' if args.char_dataset else args.dataset,
-        char_dataset=args.char_dataset,
-        batch_size=args.batch_size,
         local_minibatch_size=args.local_minibatch_size,
         block_size=args.block_size,
         val_size=args.val_size,
@@ -100,6 +101,16 @@ def config_gen(args, gpt_config):
             warmup_steps=args.warmup_steps,
             cosine_anneal=args.cosine_anneal,
             max_local_steps=args.max_steps,        
+        ),
+
+        dataset_config=DatasetConfig(
+            dataset_load_fn=get_dataset,
+            dataset_name=args.dataset,
+            batch_size=args.batch_size,
+            device=args.device_type,
+            block_size=args.block_size,
+            start_pc=args.start_pc,
+            end_pc=args.end_pc,
         ),
 
         seed=args.seed,

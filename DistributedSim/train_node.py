@@ -12,7 +12,7 @@ from .gradient_strategy.gradient_strategy import *
 from .wandb_logger import *
 from .gradient_strategy.communicate import *
 
-from .dataset.dataset import get_dataset
+from .dataset.nanogpt.dataset import get_dataset
 
 class TrainNode:
     '''
@@ -68,25 +68,20 @@ class TrainNode:
         self._load_checkpoint()
 
     def get_datasets(self):
-        ## Import Datasets
-        dataset_id = self.config.dataset_name.split('_')[0]
+        """
+        Imports datasets.
+        Currently ignores dataset_proportion parameters to favour generality.
+        """
+        # dataset_id = self.config.dataset_name.split('_')[0]
 
         train_start = (1 - self.config.val_proportion) * self.rank / self.config.num_nodes
         train_end = (1 - self.config.val_proportion) * (self.rank + 1) / self.config.num_nodes
         val_start = (1 - self.config.val_proportion)
         val_end = 1.0
 
-        self.train_dataset, self.vocab_size = get_dataset(dataset_id,
-                                             train_start * self.config.dataset_proportion,
-                                             train_end * self.config.dataset_proportion,
-                                             block_size=self.config.block_size,
-                                             char=self.config.char_dataset)
 
-        self.val_dataset, self.vocab_size = get_dataset(dataset_id,
-                                             val_start,
-                                             val_end,
-                                             block_size=self.config.block_size,
-                                             char=self.config.char_dataset)
+        self.train_dataset, self.vocab_size = self.config.dataset_config.dataset_load_fn(self.config.dataset_config, device=self.device, start_pc=train_start, end_pc=train_end)
+        self.val_dataset, self.vocab_size = self.config.dataset_config.dataset_load_fn(self.config.dataset_config, device=self.device, start_pc=val_start, end_pc=val_end)
 
         ## Build Dataloaders
         self.train_dataloader = DataLoader(self.train_dataset, 
@@ -216,6 +211,7 @@ class TrainNode:
             x_batch = x[i:i+minibatch_size]
             y_batch = y[i:i+minibatch_size]
 
+            ## TODO: Do we want this?
             if self.config.autocast:
                 with torch.autocast(device_type=self.config.device_type, dtype=torch.bfloat16):
                     _, loss = self.model(x_batch, y_batch)

@@ -55,6 +55,13 @@ class LocalSimBuilder(SimBuilder):
         os.environ['MASTER_ADDR'] = 'localhost'
         os.environ['MASTER_PORT'] = str(12355 + (10 if self.config.device_type == 'cpu' else 0))
 
+        if self.config.device_type == '' and torch.cuda.is_available():
+            self.config.device_type = 'cuda'
+        elif self.config.device_type == '' and torch.backends.mps.is_available():
+            self.config.device_type = 'mps' 
+        else:
+            self.config.device_type = 'cpu'
+
         # initialize the process group
         if self.config.device_type == 'cuda':
             # If we haven't specified devices, use all devices.

@@ -9,22 +9,17 @@ class SimConfig:
                  num_nodes: Optional[int] = None,
                  model_class: Optional[Type[torch.nn.Module]] = None,
                  model_kwargs: dict = {},
-                 train_dataset: Optional[torch.utils.data.Dataset] = None,
-                 val_dataset: Optional[torch.utils.data.Dataset] = None,
                  batch_size: int = 64,
                  gradient_class: Optional[Type[GradientStrategy]] = None,
                  gradient_config: dict = {},
                  eval_interval: int = 10,
                  gpu_offset: int = 0,
                  checkpoint_interval: int = 100,
-                 diloco_interval: int = 1000,
                  **kwargs):
         self.num_nodes = num_nodes
 
         self.model_class = model_class
         self.model_kwargs = model_kwargs
-        self.train_dataset = train_dataset
-        self.val_dataset = val_dataset
         self.batch_size = batch_size
 
         self.gradient_class = gradient_class
@@ -36,9 +31,3 @@ class SimConfig:
         # Allow additional kwargs to be set as attributes
         for key, value in kwargs.items():
             setattr(self, key, value)
-
-### Example gradient config:
-# gradient_config = {
-#     "optimizer_class": torch.optim.SGD,
-#     "optimizer_kwargs": {"lr": 0.01},
-# }
