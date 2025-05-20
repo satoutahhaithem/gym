@@ -31,9 +31,7 @@ class TrainNode:
 
         self.get_datasets()
 
-        self.config.gpt_config.vocab_size = self.vocab_size
-        
-        self.model = self.config.model_class(self.config.gpt_config).to(self.device)
+        self.model = self.config.model_class(self.config.model_config).to(self.device)
     
         print(f"model parameter count: ", self.model.get_num_params() / 1e6)
 
@@ -80,8 +78,8 @@ class TrainNode:
         val_end = 1.0
 
 
-        self.train_dataset, self.vocab_size = self.config.dataset_config.dataset_load_fn(self.config.dataset_config, device=self.device, start_pc=train_start, end_pc=train_end)
-        self.val_dataset, self.vocab_size = self.config.dataset_config.dataset_load_fn(self.config.dataset_config, device=self.device, start_pc=val_start, end_pc=val_end)
+        self.train_dataset = self.config.dataset_config.dataset_load_fn(self.config.dataset_config, device=self.device, start_pc=train_start, end_pc=train_end)
+        self.val_dataset = self.config.dataset_config.dataset_load_fn(self.config.dataset_config, device=self.device, start_pc=val_start, end_pc=val_end)
 
         ## Build Dataloaders
         self.train_dataloader = DataLoader(self.train_dataset, 
@@ -233,7 +231,7 @@ class TrainNode:
             self._save_checkpoint()
 
     def _evaluate(self):
-        model_clone = self.config.model_class(self.config.gpt_config).to(self.device)
+        model_clone = self.config.model_class(self.config.model_config).to(self.device)
         model_clone.load_state_dict(copy.deepcopy(self.model.state_dict()))
 
         for name, param in model_clone.named_parameters():

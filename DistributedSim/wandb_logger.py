@@ -28,7 +28,7 @@ class WandbLogger:
             })
 
             # Remove unnecessary keys
-            keys_to_remove = ['model_class', 'gpt_config', 'train_dataset', 'val_dataset']
+            keys_to_remove = ['model_class', 'model_config', 'train_dataset', 'val_dataset']
             for key in keys_to_remove:
                 if key in wandb_config:
                     del wandb_config[key]

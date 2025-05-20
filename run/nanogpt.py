@@ -73,7 +73,7 @@ def gen_gpt_config(args):
 def config_gen(args, gpt_config):
     config = SimConfig(
         model_class=GPT,
-        gpt_config=gpt_config,
+        model_config=gpt_config,
 
         num_epochs=args.epochs,
         num_nodes=args.num_nodes,
@@ -111,6 +111,7 @@ def config_gen(args, gpt_config):
             block_size=args.block_size,
             start_pc=args.start_pc,
             end_pc=args.end_pc,
+            gpt_config=gpt_config,
         ),
 
         seed=args.seed,
