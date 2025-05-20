@@ -83,11 +83,11 @@ class TrainNode:
 
         ## Build Dataloaders
         self.train_dataloader = DataLoader(self.train_dataset, 
-                          batch_size=self.config.batch_size,
+                          batch_size=self.config.minibatch_size,
                           shuffle=True)
 
         self.val_dataloader = DataLoader(self.val_dataset, 
-                          batch_size=self.config.batch_size,
+                          batch_size=self.config.minibatch_size,
                           shuffle=True)
 
         self.train_data_iter = iter(self.train_dataloader)
@@ -183,44 +183,43 @@ class TrainNode:
     def _get_batch(self, eval=False):
         if not eval or self.val_data_iter is None:
             try:
-                x, y = next(self.train_data_iter)
+                batch = next(self.train_data_iter)
             except StopIteration:
                 self.epoch += 1
                 self.train_data_iter = iter(self.train_dataloader)
-                x, y = next(self.train_data_iter)
+                batch = next(self.train_data_iter)
         else:
             try:
-                x, y = next(self.val_data_iter)
+                batch = next(self.val_data_iter)
             except StopIteration:
                 self.val_data_iter = iter(self.val_dataloader)
-                x, y = next(self.val_data_iter)
+                batch = next(self.val_data_iter)
 
-        x, y = x.to(self.device), y.to(self.device)
+        if isinstance(batch, tuple) or isinstance(batch, list):
+            batch = tuple(x.to(self.device) for x in batch)
+        else:
+            batch = batch.to(self.device)
 
-        return x, y
+        return batch
 
     def _train_step(self):
-        x, y = self._get_batch()
         self.gradient_strategy.zero_grad()
         
-        minibatch_size = self.config.local_minibatch_size if self.config.local_minibatch_size else self.config.batch_size
-
-        for i in range(0, len(x), minibatch_size):
-            x_batch = x[i:i+minibatch_size]
-            y_batch = y[i:i+minibatch_size]
+        for i in range(self.config.batch_size // self.config.minibatch_size):
+            minibatch = self._get_batch()
 
             ## TODO: Do we want this?
             if self.config.autocast:
                 with torch.autocast(device_type=self.config.device_type, dtype=torch.bfloat16):
-                    _, loss = self.model(x_batch, y_batch)
+                    _, loss = self.model(minibatch)
             else:
-                _, loss = self.model(x_batch, y_batch)
+                _, loss = self.model(minibatch)
 
             loss.backward()
 
         for name, param in self.model.named_parameters():
             if param.requires_grad:
-                param.grad /= (len(x) / minibatch_size)
+                param.grad /= (self.config.batch_size / self.config.minibatch_size)
         
         self.gradient_strategy.step()
 
@@ -255,20 +254,17 @@ class TrainNode:
 
             with torch.no_grad():
                 for _ in range(int(self.config.val_size / self.config.batch_size)):
-                    x, y = self._get_batch(eval=True)
 
-                    minibatch_size = self.config.local_minibatch_size if self.config.local_minibatch_size else self.config.batch_size
-                    for i in range(0, len(x), minibatch_size):
-                        x_batch = x[i:i+minibatch_size]
-                        y_batch = y[i:i+minibatch_size]
+                    for i in range(self.config.batch_size // self.config.minibatch_size):
+                        minibatch = self._get_batch(eval=True)
 
                         if self.config.autocast:
                             with torch.autocast(device_type=self.config.device_type, dtype=torch.bfloat16):
-                                _, loss = this_model(x_batch, y_batch)
+                                _, loss = this_model(minibatch)
                         else:
-                            _, loss = this_model(x_batch, y_batch)
+                            _, loss = this_model(minibatch)
 
-                        loss_total += loss.item() / (self.config.batch_size // minibatch_size)
+                        loss_total += loss.item() / (self.config.batch_size // self.config.minibatch_size)
 
         # Rank 0 logs the local evaluation.
         if self.rank == 0:

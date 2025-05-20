@@ -37,7 +37,7 @@ def arg_parse():
     )
 
     parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--local_minibatch_size", type=int, default=None)
+    parser.add_argument("--minibatch_size", type=int, default=None)
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--max_norm", type=float, default=1.0)
     parser.add_argument("--warmup_steps", type=int, default=1000)
@@ -81,7 +81,7 @@ def config_gen(args, gpt_config):
         devices=args.devices,
         autocast=args.autocast,
 
-        local_minibatch_size=args.local_minibatch_size,
+        minibatch_size=args.minibatch_size if args.minibatch_size else args.batch_size,
         block_size=args.block_size,
         val_size=args.val_size,
         save_dir=args.checkpoint_dir,
