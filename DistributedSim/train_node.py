@@ -72,9 +72,9 @@ class TrainNode:
         """
         # dataset_id = self.config.dataset_name.split('_')[0]
 
-        train_start = (1 - self.config.val_proportion) * self.rank / self.config.num_nodes
-        train_end = (1 - self.config.val_proportion) * (self.rank + 1) / self.config.num_nodes
-        val_start = (1 - self.config.val_proportion)
+        train_start = (1 - self.config.dataset_config.val_proportion) * self.rank / self.config.num_nodes * self.config.dataset_config.dataset_proportion
+        train_end = (1 - self.config.dataset_config.val_proportion) * (self.rank + 1) / self.config.num_nodes * self.config.dataset_config.dataset_proportion
+        val_start = (1 - self.config.dataset_config.val_proportion)
         val_end = 1.0
 
 

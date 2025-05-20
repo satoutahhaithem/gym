@@ -87,8 +87,6 @@ def config_gen(args, gpt_config):
         save_dir=args.checkpoint_dir,
         checkpoint_interval=args.checkpoint_interval,
         eval_interval=args.eval_interval,
-        dataset_proportion=args.dataset_proportion,
-        val_proportion=args.val_proportion,
         correlation_interval=args.correlation_interval,
 
         gradient_config=GradientConfig(
@@ -109,8 +107,8 @@ def config_gen(args, gpt_config):
             batch_size=args.batch_size,
             device=args.device_type,
             block_size=args.block_size,
-            start_pc=args.start_pc,
-            end_pc=args.end_pc,
+            dataset_proportion=args.dataset_proportion,
+            val_proportion=args.val_proportion,
             gpt_config=gpt_config,
         ),
 
