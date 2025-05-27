@@ -7,7 +7,6 @@ from DistributedSim.dataset.nanogpt.dataset import get_dataset
 from DistributedSim.strategy.strategy import OptimSpec
 
 import torch
-from functools import partial
 
 def main():
   train_dataset, vocab_size = get_dataset('shakespeare', block_size=1024, storage_device='cpu', compute_device='mps', start_pc=0.0, end_pc=0.9)
@@ -21,8 +20,6 @@ def main():
     val_dataset, 
   )
 
-  # optim = torch.optim.AdamW(model.parameters(), lr=0.001)
-  # optim = partial(torch.optim.AdamW, lr=0.001)
   optim = OptimSpec(
     torch.optim.AdamW,
     lr=0.001

@@ -25,24 +25,6 @@ class OptimSpec:
     def build(self, model):
         return self.cls(model.parameters(), **(self.kwargs or {}))
 
-# class StrategyConfig:
-#     def __init__(self, 
-#                  optimizer: OptimSpec = None,
-#                  lr_scheduler: Type[torch.optim.lr_scheduler._LRScheduler] = None,
-#                  lr_scheduler_kwargs: dict = None,
-#                  max_local_steps: int = None,
-#                  max_norm: float = None,
-#                  **kwargs):
-#         self.optimizer = optimizer
-#         self.lr_scheduler = lr_scheduler
-#         self.lr_scheduler_kwargs = lr_scheduler_kwargs
-#         self.max_local_steps = max_local_steps
-#         self.max_norm = max_norm
-
-#         # Allow additional kwargs to be set as attributes
-#         for key, value in kwargs.items():
-#             setattr(self, key, value)
-
 class Strategy:
     def __init__(self):
         # if logger is not None:

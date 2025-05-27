@@ -25,7 +25,15 @@ class TrainNode:
                  strategy: Strategy,
                  device: torch.device,
                  rank: int,
-                 num_nodes: int):
+                 num_nodes: int,
+                 batch_size: int = 16, 
+                 minibatch_size: int = 16,
+                 val_size: int = 64, 
+                 eval_interval: int = 100,
+                 checkpoint_interval: int = 100,
+                 autocast: bool = False,
+                 **kwargs):
+
         self.model = model
         self.train_dataset = train_dataset
         self.val_dataset = val_dataset
@@ -34,13 +42,12 @@ class TrainNode:
         self.rank = rank
         self.num_nodes = num_nodes
 
-        ## TODO: Currently hardcoded.
-        self.val_size = 64
-        self.batch_size = 16 
-        self.minibatch_size = 16
-        self.eval_interval = 100
-        self.autocast = False
-        self.checkpoint_interval = 100
+        self.batch_size = batch_size
+        self.minibatch_size = minibatch_size
+        self.val_size = val_size
+        self.eval_interval = eval_interval
+        self.autocast = autocast
+        self.checkpoint_interval = checkpoint_interval
 
         self.build_dataloaders()
 
@@ -82,95 +89,6 @@ class TrainNode:
 
         self.train_data_iter = iter(self.train_dataloader)
         self.val_data_iter = iter(self.val_dataloader)
-
-    def _save_checkpoint(self):
-        return ## TODO
-        print(self.config.save_dir, self.config.wandb_project, self.config.wandb_name, self.rank)
-        save_path_dir = os.path.join(self.config.save_dir,
-                                 self.config.wandb_project if self.config.wandb_project else 'unnamed',
-                                 self.config.wandb_name if self.config.wandb_name else 'unnamed',
-                                 str(self.rank))
-        if not os.path.exists(save_path_dir):
-            os.makedirs(save_path_dir, exist_ok=True)
-
-        filename = f"{self.local_step}.pt"
-        full_save_path = os.path.join(save_path_dir, filename)
-
-        checkpoint = {
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.strategy.optim.state_dict(),
-            'local_step': self.local_step,
-            'epoch': self.epoch,
-            'rng_state': torch.get_rng_state(),
-        }
-        if self.strategy.scheduler is not None:
-            checkpoint['scheduler_state_dict'] = self.strategy.scheduler.state_dict()
-        
-        if self.device.type == 'cuda':
-            checkpoint['cuda_rng_state'] = torch.cuda.get_rng_state()
-
-        try:
-            torch.save(checkpoint, full_save_path)
-            print(f"Rank {self.rank} saved checkpoint to {full_save_path} at step {self.local_step}")
-            self._delete_other_checkpoints(save_path_dir, full_save_path)
-        except OSError as e:
-            print(f"Rank {self.rank}: Failed to save checkpoint {full_save_path} due to OSError: {e}. Attempting to delete oldest checkpoint and retry.")
-            
-            oldest_step = float('inf')
-            oldest_checkpoint_file = None
-            # Ensure save_path_dir exists before listing its contents, though it should have been created.
-            if os.path.exists(save_path_dir):
-                for f_name in os.listdir(save_path_dir):
-                    if f_name.endswith('.pt'):
-                        try:
-                            # Checkpoints are named as {step_num}.pt
-                            step_num = int(f_name.split('.')[0])
-                            if step_num < oldest_step:
-                                oldest_step = step_num
-                                oldest_checkpoint_file = f_name
-                        except ValueError:
-                            # Skip files not matching the expected N.pt pattern
-                            continue
-            
-            if oldest_checkpoint_file:
-                oldest_checkpoint_path = os.path.join(save_path_dir, oldest_checkpoint_file)
-                try:
-                    os.remove(oldest_checkpoint_path)
-                    print(f"Rank {self.rank}: Deleted oldest checkpoint {oldest_checkpoint_path} to free space.")
-                    
-                    # Retry saving the current checkpoint
-                    try:
-                        torch.save(checkpoint, full_save_path)
-                        print(f"Rank {self.rank}: Successfully saved checkpoint {full_save_path} after deleting oldest.")
-                        self._delete_other_checkpoints(save_path_dir, full_save_path)
-                    except OSError as e2:
-                        print(f"Rank {self.rank}: Still failed to save checkpoint {full_save_path} after deleting oldest: {e2}. Giving up.")
-                        raise # Re-raise the second error, as we couldn't save even after cleanup
-                except OSError as del_e:
-                    print(f"Rank {self.rank}: Failed to delete oldest checkpoint {oldest_checkpoint_path}: {del_e}. Original save error will be raised.")
-                    raise e # Re-raise the original save error, as cleanup failed
-            else:
-                print(f"Rank {self.rank}: No old checkpoints found to delete in {save_path_dir}. Original save error will be raised.")
-                raise e # Re-raise the original save error, as no space could be freed
-
-    def _delete_other_checkpoints(self, save_path_dir: str, current_checkpoint_full_path: str):
-        return ## TODO
-        if not os.path.exists(save_path_dir):
-            return
-
-        current_checkpoint_filename = os.path.basename(current_checkpoint_full_path)
-        deleted_count = 0
-        for f_name in os.listdir(save_path_dir):
-            if f_name.endswith('.pt') and f_name != current_checkpoint_filename:
-                try:
-                    file_to_delete = os.path.join(save_path_dir, f_name)
-                    os.remove(file_to_delete)
-                    # print(f"Rank {self.rank}: Deleted old checkpoint {file_to_delete}")
-                    deleted_count += 1
-                except OSError as del_e:
-                    print(f"Rank {self.rank}: Warning - Failed to delete old checkpoint {file_to_delete}: {del_e}")
-        if deleted_count > 0:
-            print(f"Rank {self.rank}: Deleted {deleted_count} other checkpoint(s) in {save_path_dir}.")
 
     def _get_batch(self, eval=False):
         if not eval or self.val_data_iter is None:
@@ -278,77 +196,95 @@ class TrainNode:
 
         del model_clone
 
-    def _correlation_calculation(self):
+
+    def _save_checkpoint(self):
         return ## TODO
-        if self.num_nodes < 2:
-            raise Exception('Correlation calculation cannot be used with < 2 nodes')
+        print(self.config.save_dir, self.config.wandb_project, self.config.wandb_name, self.rank)
+        save_path_dir = os.path.join(self.config.save_dir,
+                                 self.config.wandb_project if self.config.wandb_project else 'unnamed',
+                                 self.config.wandb_name if self.config.wandb_name else 'unnamed',
+                                 str(self.rank))
+        if not os.path.exists(save_path_dir):
+            os.makedirs(save_path_dir, exist_ok=True)
+
+        filename = f"{self.local_step}.pt"
+        full_save_path = os.path.join(save_path_dir, filename)
+
+        checkpoint = {
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.strategy.optim.state_dict(),
+            'local_step': self.local_step,
+            'epoch': self.epoch,
+            'rng_state': torch.get_rng_state(),
+        }
+        if self.strategy.scheduler is not None:
+            checkpoint['scheduler_state_dict'] = self.strategy.scheduler.state_dict()
         
-        # Ensure correlation is only calculated if interval is set
-        if not self.config.correlation_interval:
-             return None
-        
-        # Create a temporary directory for this timestep's checkpoints
-        tmp_dir = os.path.join(self.config.save_dir, f"tmp_corr_{self.local_step}")
-        # Only rank 0 creates the directory to avoid race conditions
-        if self.rank == 0:
-            os.makedirs(tmp_dir, exist_ok=True)
-        torch.distributed.barrier() # Wait for rank 0 to create dir
+        if self.device.type == 'cuda':
+            checkpoint['cuda_rng_state'] = torch.cuda.get_rng_state()
 
-        # Save model state dict for each rank
-        checkpoint_path = os.path.join(tmp_dir, f"{self.rank}.pt")
-        torch.save(self.model.state_dict(), checkpoint_path)
-
-        # Wait for all processes to save their checkpoints
-        torch.distributed.barrier()
-
-        corr_value = None
-        if self.rank == 0:
-            # Load all models as vectors
-            model_vectors = []
-            for r in range(self.config.num_nodes):
-                model_path = os.path.join(tmp_dir, f"{r}.pt")
-                # Ensure the file exists before trying to load
-                if os.path.exists(model_path):
-                    checkpoint = torch.load(model_path, map_location='cpu')
-                    vector_list = []
-                    for key in sorted(checkpoint.keys()):
-                        value = checkpoint[key]
-                        if isinstance(value, torch.Tensor):
-                            vector_list.append(value.cpu().numpy().ravel())
-                    if vector_list: # Check if we actually got any tensors
-                        model_vectors.append(np.concatenate(vector_list))
-                else:
-                    print(f"Warning: Checkpoint file {model_path} not found for rank {r}.")
-
-
-            if len(model_vectors) >= 2: # Need at least two models to compare
-                # Calculate correlations between all pairs
-                correlations = []
-                for i in range(len(model_vectors)):
-                    for j in range(i+1, len(model_vectors)):
-                        corr = np.corrcoef(model_vectors[i], model_vectors[j])[0, 1]
-                        correlations.append(corr)
-
-                if correlations: # Ensure correlations list is not empty
-                    corr_value = np.mean(correlations)
-
-                    # Log average correlation to wandb using the logger
-                    if self.logger:
-                         self.logger.log(data={'avg_model_correlation': corr_value})
-                else:
-                    print("Warning: Could not calculate correlation, not enough valid model pairs.")
+        try:
+            torch.save(checkpoint, full_save_path)
+            print(f"Rank {self.rank} saved checkpoint to {full_save_path} at step {self.local_step}")
+            self._delete_other_checkpoints(save_path_dir, full_save_path)
+        except OSError as e:
+            print(f"Rank {self.rank}: Failed to save checkpoint {full_save_path} due to OSError: {e}. Attempting to delete oldest checkpoint and retry.")
+            
+            oldest_step = float('inf')
+            oldest_checkpoint_file = None
+            # Ensure save_path_dir exists before listing its contents, though it should have been created.
+            if os.path.exists(save_path_dir):
+                for f_name in os.listdir(save_path_dir):
+                    if f_name.endswith('.pt'):
+                        try:
+                            # Checkpoints are named as {step_num}.pt
+                            step_num = int(f_name.split('.')[0])
+                            if step_num < oldest_step:
+                                oldest_step = step_num
+                                oldest_checkpoint_file = f_name
+                        except ValueError:
+                            # Skip files not matching the expected N.pt pattern
+                            continue
+            
+            if oldest_checkpoint_file:
+                oldest_checkpoint_path = os.path.join(save_path_dir, oldest_checkpoint_file)
+                try:
+                    os.remove(oldest_checkpoint_path)
+                    print(f"Rank {self.rank}: Deleted oldest checkpoint {oldest_checkpoint_path} to free space.")
+                    
+                    # Retry saving the current checkpoint
+                    try:
+                        torch.save(checkpoint, full_save_path)
+                        print(f"Rank {self.rank}: Successfully saved checkpoint {full_save_path} after deleting oldest.")
+                        self._delete_other_checkpoints(save_path_dir, full_save_path)
+                    except OSError as e2:
+                        print(f"Rank {self.rank}: Still failed to save checkpoint {full_save_path} after deleting oldest: {e2}. Giving up.")
+                        raise # Re-raise the second error, as we couldn't save even after cleanup
+                except OSError as del_e:
+                    print(f"Rank {self.rank}: Failed to delete oldest checkpoint {oldest_checkpoint_path}: {del_e}. Original save error will be raised.")
+                    raise e # Re-raise the original save error, as cleanup failed
             else:
-                 print(f"Warning: Not enough models loaded ({len(model_vectors)}) to calculate correlation.")
+                print(f"Rank {self.rank}: No old checkpoints found to delete in {save_path_dir}. Original save error will be raised.")
+                raise e # Re-raise the original save error, as no space could be freed
 
+    def _delete_other_checkpoints(self, save_path_dir: str, current_checkpoint_full_path: str):
+        return ## TODO
+        if not os.path.exists(save_path_dir):
+            return
 
-            # Clean up temporary directory
-            import shutil
-            shutil.rmtree(tmp_dir)
-
-        # Wait for rank 0 to finish cleanup
-        torch.distributed.barrier()
-
-        return corr_value # Only rank 0 returns a value, others return None
+        current_checkpoint_filename = os.path.basename(current_checkpoint_full_path)
+        deleted_count = 0
+        for f_name in os.listdir(save_path_dir):
+            if f_name.endswith('.pt') and f_name != current_checkpoint_filename:
+                try:
+                    file_to_delete = os.path.join(save_path_dir, f_name)
+                    os.remove(file_to_delete)
+                    # print(f"Rank {self.rank}: Deleted old checkpoint {file_to_delete}")
+                    deleted_count += 1
+                except OSError as del_e:
+                    print(f"Rank {self.rank}: Warning - Failed to delete old checkpoint {file_to_delete}: {del_e}")
+        if deleted_count > 0:
+            print(f"Rank {self.rank}: Deleted {deleted_count} other checkpoint(s) in {save_path_dir}.")
 
     def _load_checkpoint(self):
         return ## TODO
@@ -440,6 +376,78 @@ class TrainNode:
             return False
         
         return True
+
+    def _correlation_calculation(self):
+        return ## TODO
+        if self.num_nodes < 2:
+            raise Exception('Correlation calculation cannot be used with < 2 nodes')
+        
+        # Ensure correlation is only calculated if interval is set
+        if not self.config.correlation_interval:
+             return None
+        
+        # Create a temporary directory for this timestep's checkpoints
+        tmp_dir = os.path.join(self.config.save_dir, f"tmp_corr_{self.local_step}")
+        # Only rank 0 creates the directory to avoid race conditions
+        if self.rank == 0:
+            os.makedirs(tmp_dir, exist_ok=True)
+        torch.distributed.barrier() # Wait for rank 0 to create dir
+
+        # Save model state dict for each rank
+        checkpoint_path = os.path.join(tmp_dir, f"{self.rank}.pt")
+        torch.save(self.model.state_dict(), checkpoint_path)
+
+        # Wait for all processes to save their checkpoints
+        torch.distributed.barrier()
+
+        corr_value = None
+        if self.rank == 0:
+            # Load all models as vectors
+            model_vectors = []
+            for r in range(self.config.num_nodes):
+                model_path = os.path.join(tmp_dir, f"{r}.pt")
+                # Ensure the file exists before trying to load
+                if os.path.exists(model_path):
+                    checkpoint = torch.load(model_path, map_location='cpu')
+                    vector_list = []
+                    for key in sorted(checkpoint.keys()):
+                        value = checkpoint[key]
+                        if isinstance(value, torch.Tensor):
+                            vector_list.append(value.cpu().numpy().ravel())
+                    if vector_list: # Check if we actually got any tensors
+                        model_vectors.append(np.concatenate(vector_list))
+                else:
+                    print(f"Warning: Checkpoint file {model_path} not found for rank {r}.")
+
+
+            if len(model_vectors) >= 2: # Need at least two models to compare
+                # Calculate correlations between all pairs
+                correlations = []
+                for i in range(len(model_vectors)):
+                    for j in range(i+1, len(model_vectors)):
+                        corr = np.corrcoef(model_vectors[i], model_vectors[j])[0, 1]
+                        correlations.append(corr)
+
+                if correlations: # Ensure correlations list is not empty
+                    corr_value = np.mean(correlations)
+
+                    # Log average correlation to wandb using the logger
+                    if self.logger:
+                         self.logger.log(data={'avg_model_correlation': corr_value})
+                else:
+                    print("Warning: Could not calculate correlation, not enough valid model pairs.")
+            else:
+                 print(f"Warning: Not enough models loaded ({len(model_vectors)}) to calculate correlation.")
+
+
+            # Clean up temporary directory
+            import shutil
+            shutil.rmtree(tmp_dir)
+
+        # Wait for rank 0 to finish cleanup
+        torch.distributed.barrier()
+
+        return corr_value # Only rank 0 returns a value, others return None
 
     def train(self, num_epochs: int):
         self.max_steps = num_epochs * len(self.train_dataloader)

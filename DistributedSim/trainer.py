@@ -29,13 +29,25 @@ class Trainer:
           num_epochs: int,
           strategy: Strategy,
           num_nodes: int,
-          device: str):
+          device: str,
+          batch_size: int = 16,
+          minibatch_size: int = 16,
+          val_size: int = 64,
+          eval_interval: int = 100,
+          autocast: bool = False,
+          checkpoint_interval: int = 100):
     self.device = device
     self.strategy = strategy
     self.num_nodes = num_nodes
     self.num_epochs = num_epochs
 
-    print('pre spawn')
+    self.batch_size = batch_size
+    self.minibatch_size = minibatch_size
+    self.val_size = val_size
+    self.eval_interval = eval_interval
+    self.autocast = autocast
+    self.checkpoint_interval = checkpoint_interval
+
     torch.multiprocessing.spawn(self._fit, args=(), nprocs=num_nodes, join=True)
 
   def _fit(self, rank):
@@ -48,10 +60,10 @@ class Trainer:
 
     self.model = copy.deepcopy(self.model).to(self.device)
 
-    # TODO: Replace this with something native to strategy. Let the strategy reset it's own internal state.
     self.strategy = copy.deepcopy(self.strategy)
     self.strategy._init_node(self.model, self.rank, self.num_nodes)
 
+    # TODO: What is our separation between the constructor and the train method?
     sim = TrainNode(
       self.model,
       self.train_dataset,
@@ -59,7 +71,13 @@ class Trainer:
       self.strategy,
       self.device,
       self.rank,
-      self.num_nodes
+      self.num_nodes,
+      batch_size=self.batch_size,
+      minibatch_size=self.minibatch_size,
+      val_size=self.val_size,
+      eval_interval=self.eval_interval,
+      checkpoint_interval=self.checkpoint_interval,
+      autocast=self.autocast
     )
 
     sim.train(num_epochs=self.num_epochs)
