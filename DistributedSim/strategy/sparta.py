@@ -8,27 +8,27 @@ from .strategy import Strategy
 from .communicate import *
 
 class SPARTAStrategy(Strategy):
-    def __init__(self, rank, model, config, logger=None):
-        super().__init__(rank, model, config, logger)
+    def __init__(self, 
+                 optim,
+                 p_sparta=0.005):
 
-        self.optim = self.strategy_config.optimizer_class(model.parameters(), 
-                                                          **self.strategy_config.optimizer_kwargs)
+        super().__init__()
+
+        self.optim_factory = optim
+
         self._setup_scheduler()
 
-        # self.index_selector = PartitionedIndexSelector(self.strategy_config.p_sparta)
-        # self.index_selector = RandomIndexSelector(self.strategy_config.p_sparta)
-        self.index_selector = ShuffledSequentialIndexSelector(self.strategy_config.p_sparta)
+        self.index_selector = RandomIndexSelector(p_sparta)
+        # self.index_selector = ShuffledSequentialIndexSelector(p_sparta)
         self.iteration = 0
-        self.buffer = {} # Initialize as a dictionary for per-parameter buffers
 
     def step(self):
-        if self.strategy_config.max_norm:
-            norm = nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.strategy_config.max_norm)
-            # print(f'Rank {self.rank}: Clipped grad norm to {norm}')
+        # if self.strategy_config.max_norm:
+        #     norm = nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.strategy_config.max_norm)
 
         self.optim.step()
 
-        if self.config.num_nodes > 1:
+        if self.num_nodes > 1:
             with torch.no_grad():
                 for name, param in self.model.named_parameters():
                     if not param.requires_grad or param.grad is None:
@@ -42,23 +42,15 @@ class SPARTAStrategy(Strategy):
                     all_reduce(sparse_data, op=dist.ReduceOp.SUM) # This likely won't work as expected with masked, non-contiguous data
                     sparse_data /= dist.get_world_size()
 
-                    # Initialize buffer for this parameter if it doesn't exist
-                    if name not in self.buffer:
-                        self.buffer[name] = []
-                    
-                    # Add current sparse update to this parameter's buffer
-                    self.buffer[name].append((indices_mask, sparse_data))
+                    param.masked_scatter_(indices_mask, sparse_data)
 
-                    # If this parameter's buffer has exceeded the delay, apply the oldest update
-                    if len(self.buffer[name]) > self.strategy_config.async_sparta_delay:
-                        indices_popped, sparse_data_popped = self.buffer[name].pop(0)
-                        # Apply the popped update to the current parameter (param corresponds to name)
-                        param.masked_scatter_(indices_popped, sparse_data_popped)
-
-
-        # Increment iteration AFTER potentially using it for gradient updates/communication
         self.iteration += 1
-        super().step() # This likely calls scheduler.step()
+        super().step()
+
+    def _init_node(self, model, rank, world_size):
+        super()._init_node(model, rank, world_size)
+
+        self.optim = self.optim_factory(model.parameters())
 
 class IndexSelector:
     def __init__(self, p):

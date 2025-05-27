@@ -31,20 +31,21 @@ class StrategyConfig:
             setattr(self, key, value)
 
 class Strategy:
-    def __init__(self, rank, model, config, logger=None):
-        self.rank = rank
-        self.model = model
-        self.config = config
-        self.strategy_config = config.strategy_config
+    def __init__(self):
+        # if logger is not None:
+        #     self.logger = logger
 
-        if logger is not None:
-            self.logger = logger
-
-        self.nbytes = 0
         # Initialize scheduler as None; will be set after self.optim is defined in subclasses.
         self.scheduler = None
 
+    def _init_node(self, model, rank, num_nodes):
+        self.model = model
+        self.rank = rank
+        self.num_nodes = num_nodes
+
         self.local_step = 0
+
+        # TODO: Ensure we clean state.
 
     # @abstractmethod
     def step(self):
@@ -60,20 +61,9 @@ class Strategy:
     def zero_grad(self):
         self.optim.zero_grad()
 
-    def all_gather(self, tensor_list, tensor, group=None, async_op=False):
-        # Custom logic to save tensor size etc.
-        nbytes = tensor.element_size() * tensor.nelement()
-        self.nbytes += nbytes
-
-        if self.config.num_nodes > 1:
-            tensor_handle = all_gather(tensor_list, tensor, group, async_op)
-        else:
-            tensor_list[0] = tensor
-            tensor_handle = tensor_list[0]
-
-        return tensor_handle
-
     def _setup_scheduler(self):
+        return # TODO
+
         def lr_lambda(current_step):
             if current_step < self.strategy_config.warmup_steps:
                 return float(current_step) / float(max(self.strategy_config.warmup_steps, 1))
@@ -105,11 +95,11 @@ class SimpleReduceStrategy(Strategy):
         self._setup_scheduler()
 
     def step(self):
-        if self.config.num_nodes > 1 or True:
+        if self.num_nodes > 1 or True:
             for param in self.model.parameters():
                 if param.grad is not None:
                     all_reduce(param.grad)
-                    param.grad.div_(dist.get_world_size())
+                    param.grad.div_(self.num_nodes)
 
             if self.strategy_config.max_norm:
                 nn_utils.clip_grad_norm_(self.model.parameters(), max_norm=self.strategy_config.max_norm)

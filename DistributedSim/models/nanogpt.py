@@ -22,9 +22,9 @@ from datasets import load_dataset
 import os
 import wandb
 
-from DistributedSim.sim_builder import *
-from DistributedSim.sim_config import *
-from DistributedSim.strategy.strategy import *
+# from DistributedSim.sim_builder import *
+# from DistributedSim.sim_config import *
+# from DistributedSim.strategy.strategy import *
 
 class LayerNorm(nn.Module):
     """LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False"""
@@ -232,6 +232,7 @@ class GPT(nn.Module):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
     def forward(self, batch, inference=False):
+        # print(batch)
         idx, y = batch
 
         device = idx.device

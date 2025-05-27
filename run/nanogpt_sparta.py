@@ -3,8 +3,6 @@ import torch
 import argparse
 import numpy as np
 
-from DistributedSim.sim_builder import *
-from DistributedSim.sim_config import *
 from DistributedSim.strategy.strategy import *
 from DistributedSim.strategy.sparta import *
 

@@ -62,19 +62,16 @@ def load_data_concurrent(start_pc, end_pc, max_workers=8):
 
     return np.concatenate(data)
 
-def get_dataset(config: DatasetConfig, device, start_pc=0.0, end_pc=1.0):
-    if config.dataset_name != 'owt':
-        data, vocab_size = build_dataset(config.dataset_name, config.block_size, start_pc=start_pc, end_pc=end_pc)
+def get_dataset(dataset_name, block_size, storage_device, compute_device, start_pc=0.0, end_pc=1.0):
+    if dataset_name != 'owt':
+        data, vocab_size = build_dataset(dataset_name, block_size, start_pc=start_pc, end_pc=end_pc)
 
-        dataset = ContiguousGPTTrainDataset(data, block_size=config.block_size, device=device)
+        dataset = ContiguousGPTTrainDataset(data, block_size=block_size, storage_device=storage_device, compute_device=compute_device)
     else:
         # For OWT, pull from S3
         data = load_data_concurrent(start_pc, end_pc)
         vocab_size = 50257
 
-        dataset = NonContiguousGPTTrainDataset(data, device=device)
+        dataset = NonContiguousGPTTrainDataset(data, storage_device=storage_device, compute_device=compute_device)
 
-    # Okay this is a bit of a gross hack. But to return the vocab size, I store gpt_config in the dataset config.
-    config.gpt_config.vocab_size = vocab_size
-
-    return dataset
+    return dataset, vocab_size

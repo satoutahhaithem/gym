@@ -19,81 +19,72 @@ class TrainNode:
     Single node of distributed training process. Should be the same regardless of rank topology/architecture.
     '''
     def __init__(self, 
-                 config: SimConfig,
+                 model: torch.nn.Module,
+                 train_dataset: torch.utils.data.Dataset,
+                 val_dataset: torch.utils.data.Dataset,
+                 strategy: Strategy,
                  device: torch.device,
-                 rank: int):
-        self.config = config
+                 rank: int,
+                 num_nodes: int):
+        self.model = model
+        self.train_dataset = train_dataset
+        self.val_dataset = val_dataset
+        self.strategy = strategy
         self.device = device
         self.rank = rank
+        self.num_nodes = num_nodes
 
-        torch.manual_seed(self.config.seed)
-        torch.cuda.manual_seed(self.config.seed)
+        ## TODO: Currently hardcoded.
+        self.val_size = 64
+        self.batch_size = 16 
+        self.minibatch_size = 16
+        self.eval_interval = 100
+        self.autocast = False
+        self.checkpoint_interval = 100
 
-        self.get_datasets()
+        self.build_dataloaders()
 
-        self.model = self.config.model_class(self.config.model_config).to(self.device)
-    
+        seed = 42
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+
         print(f"model parameter count: ", self.model.get_num_params() / 1e6)
 
         ## Ensure all process models share the same params
-        if self.config.num_nodes > 1:
+        if self.num_nodes > 1:
             for _, param in self.model.named_parameters():
                 broadcast(param.data, src=0)
 
+        # if self.rank == 0:
+        #     self.logger = WandbLogger(rank=self.rank, 
+        #                               device=self.device, 
+        #                               config=self.config, 
+        #                               model=self.model, 
+        #                               max_steps=self.max_steps)
+
         self.local_step = 0
-        self.max_steps = len(self.train_dataloader) * self.config.num_epochs
-        if self.config.strategy_config.max_local_steps:
-            self.max_steps = min(self.max_steps, 
-                                 self.config.strategy_config.max_local_steps)
-
-            self.config.strategy_config.max_local_steps = self.max_steps
-
-        if self.rank == 0:
-            self.logger = WandbLogger(rank=self.rank, 
-                                      device=self.device, 
-                                      config=self.config, 
-                                      model=self.model, 
-                                      max_steps=self.max_steps)
-
-        self.gradient_strategy = self.config.strategy_class(self.rank, 
-                                                            self.model, 
-                                                            self.config,
-                                                            self.logger if self.rank == 0 else None)
-
         self.epoch = 0
         
         # Attempt to load checkpoint before starting training
         self._load_checkpoint()
 
-    def get_datasets(self):
+    def build_dataloaders(self):
         """
-        Imports datasets.
-        Currently ignores dataset_proportion parameters to favour generality.
+        Builds dataloaders.
         """
-        # dataset_id = self.config.dataset_name.split('_')[0]
-
-        train_start = (1 - self.config.dataset_config.val_proportion) * self.rank / self.config.num_nodes * self.config.dataset_config.dataset_proportion
-        train_end = (1 - self.config.dataset_config.val_proportion) * (self.rank + 1) / self.config.num_nodes * self.config.dataset_config.dataset_proportion
-        val_start = (1 - self.config.dataset_config.val_proportion)
-        val_end = 1.0
-
-
-        self.train_dataset = self.config.dataset_config.dataset_load_fn(self.config.dataset_config, device=self.device, start_pc=train_start, end_pc=train_end)
-        self.val_dataset = self.config.dataset_config.dataset_load_fn(self.config.dataset_config, device=self.device, start_pc=val_start, end_pc=val_end)
-
-        ## Build Dataloaders
         self.train_dataloader = DataLoader(self.train_dataset, 
-                          batch_size=self.config.minibatch_size,
+                          batch_size=self.batch_size,
                           shuffle=True)
 
         self.val_dataloader = DataLoader(self.val_dataset, 
-                          batch_size=self.config.minibatch_size,
+                          batch_size=self.batch_size,
                           shuffle=True)
 
         self.train_data_iter = iter(self.train_dataloader)
         self.val_data_iter = iter(self.val_dataloader)
 
     def _save_checkpoint(self):
+        return ## TODO
         print(self.config.save_dir, self.config.wandb_project, self.config.wandb_name, self.rank)
         save_path_dir = os.path.join(self.config.save_dir,
                                  self.config.wandb_project if self.config.wandb_project else 'unnamed',
@@ -107,13 +98,13 @@ class TrainNode:
 
         checkpoint = {
             'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.gradient_strategy.optim.state_dict(),
+            'optimizer_state_dict': self.strategy.optim.state_dict(),
             'local_step': self.local_step,
             'epoch': self.epoch,
             'rng_state': torch.get_rng_state(),
         }
-        if self.gradient_strategy.scheduler is not None:
-            checkpoint['scheduler_state_dict'] = self.gradient_strategy.scheduler.state_dict()
+        if self.strategy.scheduler is not None:
+            checkpoint['scheduler_state_dict'] = self.strategy.scheduler.state_dict()
         
         if self.device.type == 'cuda':
             checkpoint['cuda_rng_state'] = torch.cuda.get_rng_state()
@@ -163,6 +154,7 @@ class TrainNode:
                 raise e # Re-raise the original save error, as no space could be freed
 
     def _delete_other_checkpoints(self, save_path_dir: str, current_checkpoint_full_path: str):
+        return ## TODO
         if not os.path.exists(save_path_dir):
             return
 
@@ -203,14 +195,14 @@ class TrainNode:
         return batch
 
     def _train_step(self):
-        self.gradient_strategy.zero_grad()
+        self.strategy.zero_grad()
         
-        for i in range(self.config.batch_size // self.config.minibatch_size):
+        for i in range(self.batch_size // self.minibatch_size):
             minibatch = self._get_batch()
 
             ## TODO: Do we want this?
-            if self.config.autocast:
-                with torch.autocast(device_type=self.config.device_type, dtype=torch.bfloat16):
+            if self.autocast:
+                with torch.autocast(device_type=self.device, dtype=torch.bfloat16):
                     _, loss = self.model(minibatch)
             else:
                 _, loss = self.model(minibatch)
@@ -219,19 +211,19 @@ class TrainNode:
 
         for name, param in self.model.named_parameters():
             if param.requires_grad:
-                param.grad /= (self.config.batch_size / self.config.minibatch_size)
+                param.grad /= (self.batch_size / self.minibatch_size)
         
-        self.gradient_strategy.step()
+        self.strategy.step()
 
-        if self.rank == 0:
-            self.logger.log_train(loss=loss.item())
+        # if self.rank == 0:
+        #     self.logger.log_train(loss=loss.item())
 
-        if self.config.checkpoint_interval and self.local_step % self.config.checkpoint_interval == 0:
+        if self.checkpoint_interval and self.local_step % self.checkpoint_interval == 0:
             self._save_checkpoint()
 
     def _evaluate(self):
-        model_clone = self.config.model_class(self.config.model_config).to(self.device)
-        model_clone.load_state_dict(copy.deepcopy(self.model.state_dict()))
+        ## TODO: Split evaluation across nodes ?
+        model_clone = copy.deepcopy(self.model)
 
         for name, param in model_clone.named_parameters():
             all_reduce(param.data, op=dist.ReduceOp.SUM)
@@ -253,44 +245,42 @@ class TrainNode:
             loss_total = 0
 
             with torch.no_grad():
-                for _ in range(int(self.config.val_size / self.config.batch_size)):
+                for _ in range(int(self.val_size / self.batch_size)):
 
-                    for i in range(self.config.batch_size // self.config.minibatch_size):
+                    for i in range(self.batch_size // self.minibatch_size):
                         minibatch = self._get_batch(eval=True)
 
-                        if self.config.autocast:
-                            with torch.autocast(device_type=self.config.device_type, dtype=torch.bfloat16):
+                        if self.autocast:
+                            with torch.autocast(device_type=self.device, dtype=torch.bfloat16):
                                 _, loss = this_model(minibatch)
                         else:
                             _, loss = this_model(minibatch)
 
-                        loss_total += loss.item() / (self.config.batch_size // self.config.minibatch_size)
+                        loss_total += loss.item() / (self.batch_size // self.minibatch_size)
 
         # Rank 0 logs the local evaluation.
-        if self.rank == 0:
-            # print(f"LOCAL: Eval Loss: {loss_total / int(self.config.val_size / self.config.batch_size):.4f}, "
-            #         f"Eval Perplexity: {math.exp(loss_total / int(self.config.val_size / self.config.batch_size)):.4f}")
-            self.logger.log_pure(loss=loss_total / int(self.config.val_size / self.config.batch_size), 
-                                    name='val_local')
+        # if self.rank == 0:
+        #     self.logger.log_pure(loss=loss_total / int(self.val_size / self.batch_size), 
+        #                             name='val_local')
 
         # Broadcast the global loss from rank 1 to all ranks.
-        if self.config.num_nodes > 1:
+        if self.num_nodes > 1:
             # All ranks create a dummy tensor to participate.
             global_loss_tensor = torch.empty(1, device=next(self.model.parameters()).device)
             if self.rank == 1:
-                global_loss_tensor[0] = loss_total / int(self.config.val_size / self.config.batch_size)
+                global_loss_tensor[0] = loss_total / int(self.val_size / self.batch_size)
             broadcast(global_loss_tensor, src=1)
 
             # Only rank 0 logs the global evaluation.
-            if self.rank == 0:
-                global_loss = global_loss_tensor.item()
-                # print(f"GLOBAL: Eval Loss: {global_loss:.4f}, Eval Perplexity: {math.exp(global_loss):.4f}")
-                self.logger.log_pure(loss=global_loss, name='global')
+            # if self.rank == 0:
+            #     global_loss = global_loss_tensor.item()
+            #     self.logger.log_pure(loss=global_loss, name='global')
 
         del model_clone
 
     def _correlation_calculation(self):
-        if self.config.num_nodes < 2:
+        return ## TODO
+        if self.num_nodes < 2:
             raise Exception('Correlation calculation cannot be used with < 2 nodes')
         
         # Ensure correlation is only calculated if interval is set
@@ -361,6 +351,7 @@ class TrainNode:
         return corr_value # Only rank 0 returns a value, others return None
 
     def _load_checkpoint(self):
+        return ## TODO
         save_path_dir = os.path.join(self.config.save_dir,
                                  self.config.wandb_project if self.config.wandb_project else 'unnamed',
                                  self.config.wandb_name if self.config.wandb_name else 'unnamed',
@@ -391,10 +382,10 @@ class TrainNode:
                 checkpoint = torch.load(full_checkpoint_path, map_location=self.device)
 
                 self.model.load_state_dict(checkpoint['model_state_dict'])
-                self.gradient_strategy.optim.load_state_dict(checkpoint['optimizer_state_dict'])
+                self.strategy.optim.load_state_dict(checkpoint['optimizer_state_dict'])
                 
-                if 'scheduler_state_dict' in checkpoint and self.gradient_strategy.scheduler is not None:
-                    self.gradient_strategy.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+                if 'scheduler_state_dict' in checkpoint and self.strategy.scheduler is not None:
+                    self.strategy.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
                 
                 self.local_step = checkpoint['local_step']
                 self.epoch = checkpoint['epoch']
@@ -450,29 +441,32 @@ class TrainNode:
         
         return True
 
-    def train(self):
+    def train(self, num_epochs: int):
+        self.max_steps = num_epochs * len(self.train_dataloader)
+
         while self.local_step < self.max_steps:
-            if self.local_step % self.config.eval_interval == 0:
+            if self.local_step % self.eval_interval == 0:
                 self._evaluate()
-            
 
             self._train_step()
 
             self.local_step += 1
-            if self.rank == 0:
-                self.logger.increment_step()
+            # if self.rank == 0:
+            #     self.logger.increment_step()
 
             # if self.local_step == 5:
             #     break
 
             # Calculate correlation if interval is set and it's time
-            if self.config.correlation_interval and self.local_step > 0 and self.local_step % self.config.correlation_interval == 0:
-                self._correlation_calculation()
+            # if self.config.correlation_interval and self.local_step > 0 and self.local_step % self.config.correlation_interval == 0:
+            #     self._correlation_calculation()
 
             dist.barrier()
+
+            print(f'LOCAL STEP {self.local_step}')
 
 
         self._evaluate()
 
-        if self.config.checkpoint_interval is not None:
-            self._save_checkpoint()
+        # if self.config.checkpoint_interval is not None:
+        #     self._save_checkpoint()
