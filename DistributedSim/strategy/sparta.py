@@ -4,19 +4,23 @@ import torch.distributed as dist
 from torch import nn
 import copy
 
-from .strategy import Strategy, OptimSpec
+from typing import Dict, Any
+
+from .strategy import Strategy
+from .optim import OptimSpec
 from .communicate import *
 
 class SPARTAStrategy(Strategy):
     def __init__(self, 
                  optim_spec: OptimSpec,
+                 lr_scheduler: str = None,
+                 lr_scheduler_kwargs: Dict[str, Any] = None,
                  p_sparta=0.005):
 
-        super().__init__()
+        super().__init__(lr_scheduler=lr_scheduler,
+                         lr_scheduler_kwargs=lr_scheduler_kwargs)
 
         self.optim_spec = optim_spec
-
-        self._setup_scheduler()
 
         self.index_selector = RandomIndexSelector(p_sparta)
         # self.index_selector = ShuffledSequentialIndexSelector(p_sparta)
@@ -51,6 +55,8 @@ class SPARTAStrategy(Strategy):
         super()._init_node(model, rank, num_nodes)
 
         self.optim = self.optim_spec.build(model)
+
+        self._setup_scheduler()
 
 class IndexSelector:
     def __init__(self, p):

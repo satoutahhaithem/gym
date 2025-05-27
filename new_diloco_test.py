@@ -4,7 +4,7 @@ from DistributedSim.strategy.sparta import SPARTAStrategy
 
 from DistributedSim.models.nanogpt import GPT, GPTConfig
 from DistributedSim.dataset.nanogpt.dataset import get_dataset
-from DistributedSim.strategy.strategy import OptimSpec
+from DistributedSim.strategy.optim import OptimSpec
 
 import torch
 
@@ -25,14 +25,22 @@ def main():
     lr=0.001
   )
   strategy = SPARTAStrategy(
-    optim_spec=optim
+    optim_spec=optim,
+    lr_scheduler='lambda_cosine',
+    lr_scheduler_kwargs={
+      'warmup_steps': 100,
+      'cosine_anneal': True
+    }
   )
 
   trainer.fit(
     num_epochs=1,
     strategy=strategy,
     num_nodes=4,
-    device='mps'
+    device='mps',
+    batch_size=1,
+    minibatch_size=1,
+    val_size=1
   )
 
 if __name__ == '__main__':

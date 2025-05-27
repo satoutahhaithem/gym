@@ -1,34 +1,24 @@
-import torch
-import torch.distributed as dist
-
 from torch.optim.lr_scheduler import LambdaLR
 
-from typing import Type
 import math
 
 import torch.nn.utils as nn_utils
 
-from dataclasses import dataclass 
 from typing import Dict, Any
 
 from .communicate import *
 
-@dataclass
-class OptimSpec:
-    cls:  Type[torch.optim.Optimizer]   = torch.optim.AdamW
-    kwargs: Dict[str, Any]              = None          # e.g. {'lr': 3e-4}
-
-    def __init__(self, cls: Type[torch.optim.Optimizer], **kwargs: Dict[str, Any]):
-        self.cls = cls
-        self.kwargs = kwargs
-
-    def build(self, model):
-        return self.cls(model.parameters(), **(self.kwargs or {}))
-
 class Strategy:
-    def __init__(self):
-        # if logger is not None:
-        #     self.logger = logger
+    def __init__(self,
+                 lr_scheduler: str = None,
+                 lr_scheduler_kwargs: Dict[str, Any] = None,
+                 **kwargs: Dict[str, Any]):
+
+        self.lr_scheduler = lr_scheduler
+        self.lr_scheduler_kwargs = lr_scheduler_kwargs
+
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
         # Initialize scheduler as None; will be set after self.optim is defined in subclasses.
         self.scheduler = None
@@ -48,8 +38,8 @@ class Strategy:
 
         if self.scheduler is not None:
             self.scheduler.step()
-            if self.rank == 0:
-                self.logger.log_lr(self.scheduler.get_last_lr()[0])
+            # if self.rank == 0:
+            #     self.logger.log_lr(self.scheduler.get_last_lr()[0])
 
         self.local_step += 1
 
@@ -57,27 +47,29 @@ class Strategy:
         self.optim.zero_grad()
 
     def _setup_scheduler(self):
-        return # TODO
-
         def lr_lambda(current_step):
-            if current_step < self.strategy_config.warmup_steps:
-                return float(current_step) / float(max(self.strategy_config.warmup_steps, 1))
-            elif self.strategy_config.cosine_anneal:
+            warmup_steps = self.lr_scheduler_kwargs.get('warmup_steps', 1)
+            max_steps = self.lr_scheduler_kwargs.get('max_steps', 1)
+            cosine_anneal = self.lr_scheduler_kwargs.get('cosine_anneal', False)
+
+            if current_step < warmup_steps:
+                return float(current_step) / float(max(warmup_steps, 1))
+            elif cosine_anneal:
                 min_lr_factor = 0.1
-                progress = (current_step - self.strategy_config.warmup_steps) / float(
-                    max(1, self.strategy_config.max_local_steps - self.strategy_config.warmup_steps)
+                progress = (current_step - warmup_steps) / float(
+                    max(1, max_steps - warmup_steps)
                 )
                 cosine_term = 0.5 * (1.0 + math.cos(math.pi * progress))
                 return (1 - min_lr_factor) * cosine_term + min_lr_factor
             else:
                 return 1.0
             
-        if self.strategy_config.lr_scheduler == 'lambda_cosine':
+        if self.lr_scheduler == 'lambda_cosine':
             self.scheduler = LambdaLR(self.optim, lr_lambda)
-        elif self.strategy_config.lr_scheduler is not None:
-            lr_sched_kwargs = (self.strategy_config.lr_scheduler_kwargs 
-                               if self.strategy_config.lr_scheduler_kwargs is not None else {})
-            self.scheduler = self.strategy_config.lr_scheduler(self.optim, **lr_sched_kwargs)
+        elif self.lr_scheduler is not None:
+            lr_sched_kwargs = (self.lr_scheduler_kwargs 
+                               if self.lr_scheduler_kwargs is not None else {})
+            self.scheduler = self.lr_scheduler(self.optim, **lr_sched_kwargs)
         else:
             self.scheduler = None
 

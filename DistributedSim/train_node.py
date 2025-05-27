@@ -451,6 +451,7 @@ class TrainNode:
 
     def train(self, num_epochs: int):
         self.max_steps = num_epochs * len(self.train_dataloader)
+        self.strategy.max_steps = self.max_steps
 
         while self.local_step < self.max_steps:
             if self.local_step % self.eval_interval == 0:
