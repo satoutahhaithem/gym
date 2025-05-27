@@ -5,8 +5,8 @@ import numpy as np
 
 from DistributedSim.sim_builder import *
 from DistributedSim.sim_config import *
-from DistributedSim.gradient_strategy.gradient_strategy import *
-from DistributedSim.gradient_strategy.sparta_gradient import *
+from DistributedSim.strategy.strategy import *
+from DistributedSim.strategy.sparta import *
 
 from DistributedSim.models.nanogpt import GPT, GPTConfig
 from DistributedSim.dataset.nanogpt.build_dataset import *
@@ -32,14 +32,14 @@ def main():
 
     config = config_gen(args, gpt_config)
 
-    config.gradient_class = SPARTAGradient
-    config.gradient_config.p_sparta = args.p_sparta
-    config.gradient_config.async_sparta_delay = args.async_sparta_delay
-    config.gradient_config.schedule_p = args.schedule_p
-    config.gradient_config.p_min_factor = args.p_min_factor
-    config.gradient_config.fault_rate = args.fault_rate
+    config.strategy_class = SPARTAStrategy
+    config.strategy_config.p_sparta = args.p_sparta
+    config.strategy_config.async_sparta_delay = args.async_sparta_delay
+    config.strategy_config.schedule_p = args.schedule_p
+    config.strategy_config.p_min_factor = args.p_min_factor
+    config.strategy_config.fault_rate = args.fault_rate
 
-    # config.gradient_config.param_weights = {
+    # config.strategy_config.param_weights = {
     #     'mlp.':1.25,
     #     'attn.':0.75,
     # }

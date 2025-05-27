@@ -5,8 +5,8 @@ import numpy as np
 
 from DistributedSim.sim_builder import *
 from DistributedSim.sim_config import *
-from DistributedSim.gradient_strategy.gradient_strategy import *
-from DistributedSim.gradient_strategy.demo_gradient import *
+from DistributedSim.strategy.strategy import *
+from DistributedSim.strategy.demo import *
 
 from DistributedSim.models.nanogpt import GPT, GPTConfig
 from DistributedSim.dataset.nanogpt.build_dataset import *
@@ -32,9 +32,9 @@ def main():
 
     config = config_gen(args, gpt_config)
 
-    config.gradient_class = DeMoGradient
+    config.strategy_class = DeMoStrategy
     # Configure DeMo optimizer parameters
-    config.gradient_config.optimizer_kwargs = {
+    config.strategy_config.optimizer_kwargs = {
         'lr': args.lr,
 
         'compression_decay': args.compression_decay,

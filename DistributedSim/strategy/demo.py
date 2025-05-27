@@ -1,4 +1,3 @@
-
 """DeMo: Decoupled Momentum Optimization
 
 This implements the DeMo fused optimizer and data parallel algorithm.
@@ -16,15 +15,15 @@ import torch.distributed as dist
 from einops import rearrange
 from typing import Optional, Callable
 
-from .gradient_strategy import GradientStrategy
+from .strategy import Strategy
 from .communicate import *
 
-class DeMoGradient(GradientStrategy):
+class DeMoStrategy(Strategy):
     def __init__(self, rank, model, config, logger=None):
         super().__init__(rank, model, config, logger)
         print('initialising DeMo engine')
         self.optim = DeMo(model.parameters(), 
-                          **self.gradient_config.optimizer_kwargs, 
+                          **self.strategy_config.optimizer_kwargs, 
                           custom_all_gather=super().all_gather)
         self._setup_scheduler()
 

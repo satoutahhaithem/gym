@@ -2,27 +2,28 @@ import math
 import torch
 import torch.distributed as dist
 from torch import nn
+import copy
 
-from .gradient_strategy import GradientStrategy
+from .strategy import Strategy
 from .communicate import *
 
-class SPARTAGradient(GradientStrategy):
+class SPARTAStrategy(Strategy):
     def __init__(self, rank, model, config, logger=None):
         super().__init__(rank, model, config, logger)
 
-        self.optim = self.gradient_config.optimizer_class(model.parameters(), 
-                                                          **self.gradient_config.optimizer_kwargs)
+        self.optim = self.strategy_config.optimizer_class(model.parameters(), 
+                                                          **self.strategy_config.optimizer_kwargs)
         self._setup_scheduler()
 
-        # self.index_selector = PartitionedIndexSelector(self.gradient_config.p_sparta)
-        # self.index_selector = RandomIndexSelector(self.gradient_config.p_sparta)
-        self.index_selector = ShuffledSequentialIndexSelector(self.gradient_config.p_sparta)
+        # self.index_selector = PartitionedIndexSelector(self.strategy_config.p_sparta)
+        # self.index_selector = RandomIndexSelector(self.strategy_config.p_sparta)
+        self.index_selector = ShuffledSequentialIndexSelector(self.strategy_config.p_sparta)
         self.iteration = 0
         self.buffer = {} # Initialize as a dictionary for per-parameter buffers
 
     def step(self):
-        if self.gradient_config.max_norm:
-            norm = nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.gradient_config.max_norm)
+        if self.strategy_config.max_norm:
+            norm = nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.strategy_config.max_norm)
             # print(f'Rank {self.rank}: Clipped grad norm to {norm}')
 
         self.optim.step()
@@ -49,7 +50,7 @@ class SPARTAGradient(GradientStrategy):
                     self.buffer[name].append((indices_mask, sparse_data))
 
                     # If this parameter's buffer has exceeded the delay, apply the oldest update
-                    if len(self.buffer[name]) > self.gradient_config.async_sparta_delay:
+                    if len(self.buffer[name]) > self.strategy_config.async_sparta_delay:
                         indices_popped, sparse_data_popped = self.buffer[name].pop(0)
                         # Apply the popped update to the current parameter (param corresponds to name)
                         param.masked_scatter_(indices_popped, sparse_data_popped)

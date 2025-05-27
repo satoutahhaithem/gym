@@ -5,18 +5,18 @@ import random
 import torch
 from torch.nn import utils as nn_utils
 
-from .gradient_strategy import GradientStrategy
+from .strategy import Strategy
 from .communicate import *
 
-class FedAvgGradient(GradientStrategy):
+class FedAvgStrategy(Strategy):
     def __init__(self, rank, model, config, logger=None):
         super().__init__(rank, model, config, logger)
 
         self.local_step = 0
-        self.island_size = self.gradient_config.island_size
+        self.island_size = self.strategy_config.island_size
 
-        self.optim = self.gradient_config.optimizer_class(model.parameters(), 
-                                                          **self.gradient_config.optimizer_kwargs)
+        self.optim = self.strategy_config.optimizer_class(model.parameters(), 
+                                                          **self.strategy_config.optimizer_kwargs)
         self._setup_scheduler()
 
     def _select_partners(self):
@@ -67,15 +67,15 @@ class FedAvgGradient(GradientStrategy):
             param.data = island_average
 
     def step(self):
-        if self.gradient_config.max_norm:
-            nn_utils.clip_grad_norm_(self.model.parameters(), max_norm=self.gradient_config.max_norm)
+        if self.strategy_config.max_norm:
+            nn_utils.clip_grad_norm_(self.model.parameters(), max_norm=self.strategy_config.max_norm)
 
         # We have just calculated the loss and done the backward pass. 
         # Therefore we do inner step first.
         self.optim.step()
 
         # Outer step if needed.
-        if self.local_step % self.gradient_config.H == 0 and self.local_step > 0:
+        if self.local_step % self.strategy_config.H == 0 and self.local_step > 0:
             if self.island_size < self.config.num_nodes:
                 island_members = self._select_partners()
             else:

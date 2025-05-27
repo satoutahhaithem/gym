@@ -33,11 +33,11 @@ class WandbLogger:
                 if key in wandb_config:
                     del wandb_config[key]
 
-            if hasattr(self.config.gradient_config, '__dict__'):
-                wandb_config['gradient_config'] = self.config.gradient_config.__dict__
+            if hasattr(self.config.strategy_config, '__dict__'):
+                wandb_config['strategy_config'] = self.config.strategy_config.__dict__
             else:
-                # Handle cases where gradient_config might not be a class with __dict__ (e.g. a simple dict)
-                wandb_config['gradient_config'] = vars(self.config.gradient_config) if not isinstance(self.config.gradient_config, dict) else self.config.gradient_config
+                # Handle cases where strategy_config might not be a class with __dict__ (e.g. a simple dict)
+                wandb_config['strategy_config'] = vars(self.config.strategy_config) if not isinstance(self.config.strategy_config, dict) else self.config.strategy_config
 
             run_id_to_resume_with = None
             run_id_file_path = None
@@ -97,8 +97,8 @@ class WandbLogger:
             self.pbar.last_print_n = self.step
             self.pbar.refresh()
 
-            self.current_lr = (self.config.gradient_config.optimizer_kwargs.get('lr', 0.0)
-                            if self.config.gradient_config.optimizer_kwargs else 0.0)
+            self.current_lr = (self.config.strategy_config.optimizer_kwargs.get('lr', 0.0)
+                            if self.config.strategy_config.optimizer_kwargs else 0.0)
 
     def log(self, data: dict):
         if hasattr(self, 'wandb_name'):

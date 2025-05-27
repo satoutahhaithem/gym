@@ -3,8 +3,8 @@ import numpy as np
 
 from DistributedSim.sim_builder import *
 from DistributedSim.sim_config import *
-from DistributedSim.gradient_strategy.gradient_strategy import *
-from DistributedSim.gradient_strategy.federated_averaging import *
+from DistributedSim.strategy.strategy import *
+from DistributedSim.strategy.federated_averaging import *
 
 from DistributedSim.models.nanogpt import GPT, GPTConfig
 from DistributedSim.dataset.nanogpt.build_dataset import *
@@ -26,9 +26,9 @@ def main():
 
     config = config_gen(args, gpt_config)
 
-    config.gradient_class = FedAvgGradient
-    config.gradient_config.H = args.H
-    config.gradient_config.island_size = args.island_size
+    config.strategy_class = FedAvgStrategy
+    config.strategy_config.H = args.H
+    config.strategy_config.island_size = args.island_size
 
     simbuilder = LocalSimBuilder(config)
 

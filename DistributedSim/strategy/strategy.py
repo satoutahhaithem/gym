@@ -10,7 +10,7 @@ import torch.nn.utils as nn_utils
 
 from .communicate import *
 
-class GradientConfig:
+class StrategyConfig:
     def __init__(self, 
                  optimizer_class: Type[torch.optim.Optimizer] = None, 
                  optimizer_kwargs: dict = None,
@@ -30,12 +30,12 @@ class GradientConfig:
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-class GradientStrategy:
+class Strategy:
     def __init__(self, rank, model, config, logger=None):
         self.rank = rank
         self.model = model
         self.config = config
-        self.gradient_config = config.gradient_config
+        self.strategy_config = config.strategy_config
 
         if logger is not None:
             self.logger = logger
@@ -75,33 +75,33 @@ class GradientStrategy:
 
     def _setup_scheduler(self):
         def lr_lambda(current_step):
-            if current_step < self.gradient_config.warmup_steps:
-                return float(current_step) / float(max(self.gradient_config.warmup_steps, 1))
-            elif self.gradient_config.cosine_anneal:
+            if current_step < self.strategy_config.warmup_steps:
+                return float(current_step) / float(max(self.strategy_config.warmup_steps, 1))
+            elif self.strategy_config.cosine_anneal:
                 min_lr_factor = 0.1
-                progress = (current_step - self.gradient_config.warmup_steps) / float(
-                    max(1, self.gradient_config.max_local_steps - self.gradient_config.warmup_steps)
+                progress = (current_step - self.strategy_config.warmup_steps) / float(
+                    max(1, self.strategy_config.max_local_steps - self.strategy_config.warmup_steps)
                 )
                 cosine_term = 0.5 * (1.0 + math.cos(math.pi * progress))
                 return (1 - min_lr_factor) * cosine_term + min_lr_factor
             else:
                 return 1.0
             
-        if self.gradient_config.lr_scheduler == 'lambda_cosine':
+        if self.strategy_config.lr_scheduler == 'lambda_cosine':
             self.scheduler = LambdaLR(self.optim, lr_lambda)
-        elif self.gradient_config.lr_scheduler is not None:
-            lr_sched_kwargs = (self.gradient_config.lr_scheduler_kwargs 
-                               if self.gradient_config.lr_scheduler_kwargs is not None else {})
-            self.scheduler = self.gradient_config.lr_scheduler(self.optim, **lr_sched_kwargs)
+        elif self.strategy_config.lr_scheduler is not None:
+            lr_sched_kwargs = (self.strategy_config.lr_scheduler_kwargs 
+                               if self.strategy_config.lr_scheduler_kwargs is not None else {})
+            self.scheduler = self.strategy_config.lr_scheduler(self.optim, **lr_sched_kwargs)
         else:
             self.scheduler = None
 
 
-class SimpleReduceGradient(GradientStrategy):
+class SimpleReduceStrategy(Strategy):
     def __init__(self, rank, model, config, logger=None):
         super().__init__(rank, model, config, logger)
-        self.optim = self.gradient_config.optimizer_class(model.parameters(), 
-                                                          **self.gradient_config.optimizer_kwargs)
+        self.optim = self.strategy_config.optimizer_class(model.parameters(), 
+                                                          **self.strategy_config.optimizer_kwargs)
         self._setup_scheduler()
 
     def step(self):
@@ -111,8 +111,8 @@ class SimpleReduceGradient(GradientStrategy):
                     all_reduce(param.grad)
                     param.grad.div_(dist.get_world_size())
 
-            if self.gradient_config.max_norm:
-                nn_utils.clip_grad_norm_(self.model.parameters(), max_norm=self.gradient_config.max_norm)
+            if self.strategy_config.max_norm:
+                nn_utils.clip_grad_norm_(self.model.parameters(), max_norm=self.strategy_config.max_norm)
 
         self.optim.step()
 

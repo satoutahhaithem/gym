@@ -5,8 +5,8 @@ import numpy as np
 
 from DistributedSim.sim_builder import *
 from DistributedSim.sim_config import *
-from DistributedSim.gradient_strategy.gradient_strategy import *
-from DistributedSim.gradient_strategy.diloco_sparta_gradient import *
+from DistributedSim.strategy.strategy import *
+from DistributedSim.strategy.diloco_sparta import *
 
 from DistributedSim.models.nanogpt import GPT, GPTConfig
 from DistributedSim.dataset.nanogpt.build_dataset import *
@@ -30,17 +30,17 @@ def main():
 
     config = config_gen(args, gpt_config)
 
-    config.gradient_class = DiLoCoSPARTAGradient
-    config.gradient_config.diloco_interval = args.diloco_interval
-    config.gradient_config.outer_optimizer_cls = torch.optim.SGD
-    config.gradient_config.outer_optimizer_kwargs = {
+    config.strategy_class = DiLoCoSPARTAStrategy
+    config.strategy_config.diloco_interval = args.diloco_interval
+    config.strategy_config.outer_optimizer_cls = torch.optim.SGD
+    config.strategy_config.outer_optimizer_kwargs = {
         'lr': args.outer_lr,
         'nesterov': args.nesterov,
         'momentum': args.outer_momentum,
     }
 
-    config.gradient_config.p_sparta = args.p_sparta
-    config.gradient_config.sparta_interval = args.sparta_interval
+    config.strategy_config.p_sparta = args.p_sparta
+    config.strategy_config.sparta_interval = args.sparta_interval
 
     simbuilder = LocalSimBuilder(config)
 

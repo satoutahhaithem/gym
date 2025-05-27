@@ -4,11 +4,11 @@ from copy import deepcopy
 from torch.nn import utils as nn_utils
 import torch
 
-from .sparta_gradient import RandomIndexSelector
-from .gradient_strategy import GradientStrategy
+from .sparta import RandomIndexSelector
+from .strategy import Strategy
 from .communicate import *
 
-class DiLoCoSPARTAGradient(GradientStrategy):
+class DiLoCoSPARTAStrategy(Strategy):
     """
     DiLoCo outer optimizer with SPARTA updates at every step
     """
@@ -20,14 +20,14 @@ class DiLoCoSPARTAGradient(GradientStrategy):
             for param in self.master_model.parameters():
                 param.requires_grad = True
 
-            self.outer_optimizer = self.gradient_config.outer_optimizer_cls(self.master_model.parameters(), 
-                                                                            **self.gradient_config.outer_optimizer_kwargs)
+            self.outer_optimizer = self.strategy_config.outer_optimizer_cls(self.master_model.parameters(), 
+                                                                            **self.strategy_config.outer_optimizer_kwargs)
 
-        self.optim = self.gradient_config.optimizer_class(model.parameters(), 
-                                                          **self.gradient_config.optimizer_kwargs)
+        self.optim = self.strategy_config.optimizer_class(model.parameters(), 
+                                                          **self.strategy_config.optimizer_kwargs)
         self._setup_scheduler()
 
-        self.index_selector = RandomIndexSelector(self.gradient_config.p_sparta)
+        self.index_selector = RandomIndexSelector(self.strategy_config.p_sparta)
 
     def _average_models(self) -> None:
         for param in self.model.parameters():
@@ -47,14 +47,14 @@ class DiLoCoSPARTAGradient(GradientStrategy):
             param.data = self.master_model.state_dict()[name].data.to(param.device)
 
     def step(self):
-        if self.gradient_config.max_norm:
-            nn_utils.clip_grad_norm_(self.model.parameters(), max_norm=self.gradient_config.max_norm)
+        if self.strategy_config.max_norm:
+            nn_utils.clip_grad_norm_(self.model.parameters(), max_norm=self.strategy_config.max_norm)
 
         # We have just calculated the loss and done the backward pass. 
         # Therefore we do inner step first.
         self.optim.step()
 
-        if self.config.num_nodes > 1 and self.local_step % self.gradient_config.sparta_interval == 0:
+        if self.config.num_nodes > 1 and self.local_step % self.strategy_config.sparta_interval == 0:
             with torch.no_grad():
                 for name, param in self.model.named_parameters():
                     if not param.requires_grad:
@@ -69,7 +69,7 @@ class DiLoCoSPARTAGradient(GradientStrategy):
                     param.masked_scatter_(indices, sparse_data)
 
         # Outer step if needed.
-        if self.local_step % self.gradient_config.diloco_interval == 0 and self.local_step > 0:
+        if self.local_step % self.strategy_config.diloco_interval == 0 and self.local_step > 0:
             self._average_models()
 
             if self.rank == 0:

@@ -8,9 +8,9 @@ import os
 import copy
 
 from .sim_config import *
-from .gradient_strategy.gradient_strategy import *
+from .strategy.strategy import *
 from .wandb_logger import *
-from .gradient_strategy.communicate import *
+from .strategy.communicate import *
 
 from .dataset.nanogpt.dataset import get_dataset
 
@@ -42,11 +42,11 @@ class TrainNode:
 
         self.local_step = 0
         self.max_steps = len(self.train_dataloader) * self.config.num_epochs
-        if self.config.gradient_config.max_local_steps:
+        if self.config.strategy_config.max_local_steps:
             self.max_steps = min(self.max_steps, 
-                                 self.config.gradient_config.max_local_steps)
+                                 self.config.strategy_config.max_local_steps)
 
-            self.config.gradient_config.max_local_steps = self.max_steps
+            self.config.strategy_config.max_local_steps = self.max_steps
 
         if self.rank == 0:
             self.logger = WandbLogger(rank=self.rank, 
@@ -55,7 +55,7 @@ class TrainNode:
                                       model=self.model, 
                                       max_steps=self.max_steps)
 
-        self.gradient_strategy = self.config.gradient_class(self.rank, 
+        self.gradient_strategy = self.config.strategy_class(self.rank, 
                                                             self.model, 
                                                             self.config,
                                                             self.logger if self.rank == 0 else None)

@@ -5,7 +5,7 @@ import numpy as np
 
 from DistributedSim.sim_builder import *
 from DistributedSim.sim_config import *
-from DistributedSim.gradient_strategy.gradient_strategy import *
+from DistributedSim.strategy.strategy import *
 
 from DistributedSim.models.nanogpt import GPT, GPTConfig
 from DistributedSim.dataset.nanogpt.build_dataset import *
@@ -89,7 +89,7 @@ def config_gen(args, gpt_config):
         eval_interval=args.eval_interval,
         correlation_interval=args.correlation_interval,
 
-        gradient_config=GradientConfig(
+        strategy_config=StrategyConfig(
             optimizer_class=torch.optim.AdamW,
             optimizer_kwargs={
                 'lr': args.lr,

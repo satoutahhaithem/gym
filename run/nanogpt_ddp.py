@@ -5,8 +5,8 @@ import numpy as np
 
 from DistributedSim.sim_builder import *
 from DistributedSim.sim_config import *
-from DistributedSim.gradient_strategy.gradient_strategy import *
-from DistributedSim.gradient_strategy.demo_gradient import *
+from DistributedSim.strategy.strategy import *
+from DistributedSim.strategy.demo import *
 
 from DistributedSim.models.nanogpt import GPT, GPTConfig
 from DistributedSim.dataset.nanogpt.build_dataset import *
@@ -21,7 +21,7 @@ def main():
 
     config = config_gen(args, gpt_config)
 
-    config.gradient_class = SimpleReduceGradient
+    config.strategy_class = SimpleReduceStrategy
 
     simbuilder = LocalSimBuilder(config)
 

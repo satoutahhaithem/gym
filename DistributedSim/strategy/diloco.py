@@ -4,10 +4,10 @@ from copy import deepcopy
 from torch.nn import utils as nn_utils
 import torch
 
-from .gradient_strategy import GradientStrategy
+from .strategy import Strategy
 from .communicate import *
 
-class DiLoCoGradient(GradientStrategy):
+class DiLoCoStrategy(Strategy):
     def __init__(self, rank, model, config, logger=None):
         super().__init__(rank, model, config, logger)
 
@@ -16,11 +16,11 @@ class DiLoCoGradient(GradientStrategy):
             for param in self.master_model.parameters():
                 param.requires_grad = True
 
-            self.outer_optimizer = self.gradient_config.outer_optimizer_cls(self.master_model.parameters(), 
-                                                                            **self.gradient_config.outer_optimizer_kwargs)
+            self.outer_optimizer = self.strategy_config.outer_optimizer_cls(self.master_model.parameters(), 
+                                                                            **self.strategy_config.outer_optimizer_kwargs)
 
-        self.optim = self.gradient_config.optimizer_class(model.parameters(), 
-                                                          **self.gradient_config.optimizer_kwargs)
+        self.optim = self.strategy_config.optimizer_class(model.parameters(), 
+                                                          **self.strategy_config.optimizer_kwargs)
         self._setup_scheduler()
 
     def _average_models(self) -> None:
@@ -41,15 +41,15 @@ class DiLoCoGradient(GradientStrategy):
             param.data = self.master_model.state_dict()[name].data.to(param.device)
 
     def step(self):
-        if self.gradient_config.max_norm:
-            nn_utils.clip_grad_norm_(self.model.parameters(), max_norm=self.gradient_config.max_norm)
+        if self.strategy_config.max_norm:
+            nn_utils.clip_grad_norm_(self.model.parameters(), max_norm=self.strategy_config.max_norm)
 
         # We have just calculated the loss and done the backward pass. 
         # Therefore we do inner step first.
         self.optim.step()
 
         # Outer step if needed.
-        if self.local_step % self.gradient_config.diloco_interval == 0 and self.local_step > 0:
+        if self.local_step % self.strategy_config.diloco_interval == 0 and self.local_step > 0:
             self._average_models()
 
             if self.rank == 0:
