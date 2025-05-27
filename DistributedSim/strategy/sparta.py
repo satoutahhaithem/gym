@@ -4,17 +4,17 @@ import torch.distributed as dist
 from torch import nn
 import copy
 
-from .strategy import Strategy
+from .strategy import Strategy, OptimSpec
 from .communicate import *
 
 class SPARTAStrategy(Strategy):
     def __init__(self, 
-                 optim,
+                 optim_spec: OptimSpec,
                  p_sparta=0.005):
 
         super().__init__()
 
-        self.optim_factory = optim
+        self.optim_spec = optim_spec
 
         self._setup_scheduler()
 
@@ -40,17 +40,17 @@ class SPARTAStrategy(Strategy):
                     broadcast(indices_mask, src=0) # Broadcasting a mask might be needed
                     sparse_data = param.data[indices_mask] # Get data using the mask
                     all_reduce(sparse_data, op=dist.ReduceOp.SUM) # This likely won't work as expected with masked, non-contiguous data
-                    sparse_data /= dist.get_world_size()
+                    sparse_data /= self.num_nodes
 
                     param.masked_scatter_(indices_mask, sparse_data)
 
         self.iteration += 1
         super().step()
 
-    def _init_node(self, model, rank, world_size):
-        super()._init_node(model, rank, world_size)
+    def _init_node(self, model, rank, num_nodes):
+        super()._init_node(model, rank, num_nodes)
 
-        self.optim = self.optim_factory(model.parameters())
+        self.optim = self.optim_spec.build(model)
 
 class IndexSelector:
     def __init__(self, p):

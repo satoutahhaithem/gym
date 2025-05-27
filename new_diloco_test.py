@@ -4,6 +4,7 @@ from DistributedSim.strategy.sparta import SPARTAStrategy
 
 from DistributedSim.models.nanogpt import GPT, GPTConfig
 from DistributedSim.dataset.nanogpt.dataset import get_dataset
+from DistributedSim.strategy.strategy import OptimSpec
 
 import torch
 from functools import partial
@@ -21,9 +22,13 @@ def main():
   )
 
   # optim = torch.optim.AdamW(model.parameters(), lr=0.001)
-  optim = partial(torch.optim.AdamW, lr=0.001)
+  # optim = partial(torch.optim.AdamW, lr=0.001)
+  optim = OptimSpec(
+    torch.optim.AdamW,
+    lr=0.001
+  )
   strategy = SPARTAStrategy(
-    optim=optim
+    optim_spec=optim
   )
 
   trainer.fit(

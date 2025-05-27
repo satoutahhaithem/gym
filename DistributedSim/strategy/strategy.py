@@ -8,27 +8,40 @@ import math
 
 import torch.nn.utils as nn_utils
 
+from dataclasses import dataclass 
+from typing import Dict, Any
+
 from .communicate import *
 
-class StrategyConfig:
-    def __init__(self, 
-                 optimizer_class: Type[torch.optim.Optimizer] = None, 
-                 optimizer_kwargs: dict = None,
-                 lr_scheduler: Type[torch.optim.lr_scheduler._LRScheduler] = None,
-                 lr_scheduler_kwargs: dict = None,
-                 max_local_steps: int = None,
-                 max_norm: float = None,
-                 **kwargs):
-        self.optimizer_class = optimizer_class
-        self.optimizer_kwargs = optimizer_kwargs
-        self.lr_scheduler = lr_scheduler
-        self.lr_scheduler_kwargs = lr_scheduler_kwargs
-        self.max_local_steps = max_local_steps
-        self.max_norm = max_norm
+@dataclass
+class OptimSpec:
+    cls:  Type[torch.optim.Optimizer]   = torch.optim.AdamW
+    kwargs: Dict[str, Any]              = None          # e.g. {'lr': 3e-4}
 
-        # Allow additional kwargs to be set as attributes
-        for key, value in kwargs.items():
-            setattr(self, key, value)
+    def __init__(self, cls: Type[torch.optim.Optimizer], **kwargs: Dict[str, Any]):
+        self.cls = cls
+        self.kwargs = kwargs
+
+    def build(self, model):
+        return self.cls(model.parameters(), **(self.kwargs or {}))
+
+# class StrategyConfig:
+#     def __init__(self, 
+#                  optimizer: OptimSpec = None,
+#                  lr_scheduler: Type[torch.optim.lr_scheduler._LRScheduler] = None,
+#                  lr_scheduler_kwargs: dict = None,
+#                  max_local_steps: int = None,
+#                  max_norm: float = None,
+#                  **kwargs):
+#         self.optimizer = optimizer
+#         self.lr_scheduler = lr_scheduler
+#         self.lr_scheduler_kwargs = lr_scheduler_kwargs
+#         self.max_local_steps = max_local_steps
+#         self.max_norm = max_norm
+
+#         # Allow additional kwargs to be set as attributes
+#         for key, value in kwargs.items():
+#             setattr(self, key, value)
 
 class Strategy:
     def __init__(self):
