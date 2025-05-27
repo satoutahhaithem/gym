@@ -9,10 +9,12 @@ import copy
 
 from .sim_config import *
 from .strategy.strategy import *
-from .wandb_logger import *
+from .logger import *
 from .strategy.communicate import *
 
 from .dataset.nanogpt.dataset import get_dataset
+
+# change to two-space indent instead of four-space (which is what it is at the moment)
 
 class TrainNode:
     '''
@@ -61,13 +63,6 @@ class TrainNode:
         if self.num_nodes > 1:
             for _, param in self.model.named_parameters():
                 broadcast(param.data, src=0)
-
-        # if self.rank == 0:
-        #     self.logger = WandbLogger(rank=self.rank, 
-        #                               device=self.device, 
-        #                               config=self.config, 
-        #                               model=self.model, 
-        #                               max_steps=self.max_steps)
 
         self.local_step = 0
         self.epoch = 0
@@ -133,8 +128,8 @@ class TrainNode:
         
         self.strategy.step()
 
-        # if self.rank == 0:
-        #     self.logger.log_train(loss=loss.item())
+        if self.rank == 0:
+            self.logger.log_train(loss=loss.item())
 
         if self.checkpoint_interval and self.local_step % self.checkpoint_interval == 0:
             self._save_checkpoint()
@@ -177,9 +172,9 @@ class TrainNode:
                         loss_total += loss.item() / (self.batch_size // self.minibatch_size)
 
         # Rank 0 logs the local evaluation.
-        # if self.rank == 0:
-        #     self.logger.log_pure(loss=loss_total / int(self.val_size / self.batch_size), 
-        #                             name='val_local')
+        if self.rank == 0:
+            self.logger.log_loss(loss=loss_total / int(self.val_size / self.batch_size), 
+                                    name='val_local')
 
         # Broadcast the global loss from rank 1 to all ranks.
         if self.num_nodes > 1:
@@ -190,9 +185,9 @@ class TrainNode:
             broadcast(global_loss_tensor, src=1)
 
             # Only rank 0 logs the global evaluation.
-            # if self.rank == 0:
-            #     global_loss = global_loss_tensor.item()
-            #     self.logger.log_pure(loss=global_loss, name='global')
+            if self.rank == 0:
+                global_loss = global_loss_tensor.item()
+                self.logger.log_loss(loss=global_loss, name='global')
 
         del model_clone
 
@@ -453,6 +448,10 @@ class TrainNode:
         self.max_steps = num_epochs * len(self.train_dataloader)
         self.strategy.max_steps = self.max_steps
 
+        if self.rank == 0:
+            self.logger = Logger(model=self.model, 
+                                 max_steps=self.max_steps)
+
         while self.local_step < self.max_steps:
             if self.local_step % self.eval_interval == 0:
                 self._evaluate()
@@ -460,19 +459,14 @@ class TrainNode:
             self._train_step()
 
             self.local_step += 1
-            # if self.rank == 0:
-            #     self.logger.increment_step()
-
-            # if self.local_step == 5:
-            #     break
+            if self.rank == 0:
+                self.logger.increment_step()
 
             # Calculate correlation if interval is set and it's time
             # if self.config.correlation_interval and self.local_step > 0 and self.local_step % self.config.correlation_interval == 0:
             #     self._correlation_calculation()
 
             dist.barrier()
-
-            print(f'LOCAL STEP {self.local_step}')
 
 
         self._evaluate()
