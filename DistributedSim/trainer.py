@@ -3,6 +3,7 @@ import torch.distributed as dist
 
 from DistributedSim.train_node import TrainNode
 from DistributedSim.strategy import Strategy
+from DistributedSim.partial_dataset import PartialDataset
 
 import os
 from abc import ABC, abstractmethod
@@ -20,9 +21,9 @@ class Trainer:
     self.train_dataset = train_dataset
     self.val_dataset = val_dataset
       
-  def _get_split_dataset(self, dataset: torch.utils.data.Dataset, num_nodes: int):
+  def _get_split_dataset(self, dataset: torch.utils.data.Dataset, rank: int, num_nodes: int):
     # TODO: Split dataset properly. Potentially we can have a subsampling dataset class.
-    return copy.deepcopy(dataset)
+    return PartialDataset(dataset, rank, num_nodes)
 
 
   def fit(self,
@@ -55,8 +56,8 @@ class Trainer:
 
     self._build_connection()
 
-    self.train_dataset = self._get_split_dataset(self.train_dataset, rank)
-    self.val_dataset = self._get_split_dataset(self.val_dataset, rank)
+    self.train_dataset = self._get_split_dataset(self.train_dataset, rank, self.num_nodes)
+    self.val_dataset = self._get_split_dataset(self.val_dataset, rank, self.num_nodes)
 
     self.model = copy.deepcopy(self.model).to(self.device)
 
