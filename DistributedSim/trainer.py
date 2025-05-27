@@ -36,7 +36,8 @@ class Trainer:
           val_size: int = 64,
           eval_interval: int = 100,
           autocast: bool = False,
-          checkpoint_interval: int = 100):
+          checkpoint_interval: int = 100,
+          **kwargs):
     self.device = device
     self.strategy = strategy
     self.num_nodes = num_nodes
@@ -48,6 +49,8 @@ class Trainer:
     self.eval_interval = eval_interval
     self.autocast = autocast
     self.checkpoint_interval = checkpoint_interval
+
+    self.kwargs = kwargs
 
     torch.multiprocessing.spawn(self._fit, args=(), nprocs=num_nodes, join=True)
 
@@ -78,7 +81,8 @@ class Trainer:
       val_size=self.val_size,
       eval_interval=self.eval_interval,
       checkpoint_interval=self.checkpoint_interval,
-      autocast=self.autocast
+      autocast=self.autocast,
+      **self.kwargs
     )
 
     sim.train(num_epochs=self.num_epochs)

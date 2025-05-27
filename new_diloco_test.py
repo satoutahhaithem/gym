@@ -40,7 +40,8 @@ def main():
     device='mps',
     batch_size=1,
     minibatch_size=1,
-    val_size=1
+    val_size=1,
+    wandb_project='diloco-test'
   )
 
 if __name__ == '__main__':

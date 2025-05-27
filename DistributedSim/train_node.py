@@ -51,6 +51,8 @@ class TrainNode:
         self.autocast = autocast
         self.checkpoint_interval = checkpoint_interval
 
+        self.wandb_project = kwargs.get('wandb_project', None)
+
         self.build_dataloaders()
 
         seed = 42
@@ -449,8 +451,12 @@ class TrainNode:
         self.strategy.max_steps = self.max_steps
 
         if self.rank == 0:
-            self.logger = Logger(model=self.model, 
-                                 max_steps=self.max_steps)
+            if self.wandb_project is not None:
+                self.logger = WandbLogger(model=self.model, 
+                                    max_steps=self.max_steps)
+            else:
+                self.logger = Logger(model=self.model, 
+                                    max_steps=self.max_steps)
 
         while self.local_step < self.max_steps:
             if self.local_step % self.eval_interval == 0:
