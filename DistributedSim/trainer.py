@@ -1,5 +1,6 @@
 import torch
 import torch.distributed as dist
+import numpy as np
 
 from DistributedSim.train_node import TrainNode
 from DistributedSim.strategy import Strategy
@@ -51,6 +52,15 @@ class Trainer:
     self.checkpoint_interval = checkpoint_interval
 
     self.kwargs = kwargs
+
+    # Set random seeds
+    seed = kwargs.get('seed', 42)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    np.random.seed(seed)
+
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
 
     torch.multiprocessing.spawn(self._fit, args=(), nprocs=num_nodes, join=True)
 

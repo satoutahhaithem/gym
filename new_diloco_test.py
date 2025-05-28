@@ -6,15 +6,15 @@ from DistributedSim.strategy.sparta_diloco import SPARTADiLoCoStrategy
 from DistributedSim.strategy.federated_averaging import FedAvgStrategy
 from DistributedSim.strategy.demo import DeMoStrategy
 
-from example.nanogpt.nanogpt import GPT, GPTConfig
-from example.nanogpt.dataset import get_dataset
+from DistributedSim.example.nanogpt.nanogpt import GPT, GPTConfig
+from DistributedSim.example.nanogpt.dataset import get_dataset
 from DistributedSim.strategy.optim import OptimSpec
 
 import torch
 
 def main():
-  train_dataset, vocab_size = get_dataset('shakespeare', block_size=1024, storage_device='cpu', compute_device='mps', start_pc=0.0, end_pc=0.9)
-  val_dataset, vocab_size = get_dataset('shakespeare', block_size=1024, storage_device='cpu', compute_device='mps', start_pc=0.9, end_pc=1.0)
+  train_dataset, vocab_size = get_dataset('shakespeare', block_size=1024, device='cpu', start_pc=0.0, end_pc=0.9)
+  val_dataset, vocab_size = get_dataset('shakespeare', block_size=1024, device='cpu', start_pc=0.9, end_pc=1.0)
 
   model = GPT(GPTConfig(n_layer=12, n_head=12, n_embd=768, vocab_size=vocab_size))
 

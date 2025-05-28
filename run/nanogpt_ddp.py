@@ -3,9 +3,9 @@ from DistributedSim.strategy.strategy import Strategy
 from DistributedSim.example.nanogpt.nanogpt import GPT, GPTConfig
 from DistributedSim.example.nanogpt.dataset import get_dataset
 from DistributedSim.strategy.optim import OptimSpec
+from .common_args import get_common_parser
 
 import torch
-import argparse
 import numpy as np
 
 def gen_wandb_name(args):
@@ -13,52 +13,12 @@ def gen_wandb_name(args):
   return name
 
 def arg_parse():
-  # Command line arguments
-  parser = argparse.ArgumentParser(conflict_handler='resolve')
-
-  parser.add_argument(
-    "--dataset", type=str, default="shakespeare", 
-    help="which dataset to use (shakespeare, wikitext, code, owt)"
-  )
-  parser.add_argument("--start_pc", type=float, default=0.0)
-  parser.add_argument("--end_pc", type=float, default=0.9)
-  parser.add_argument("--val_start_pc", type=float, default=0.9)
-  parser.add_argument("--val_end_pc", type=float, default=1.0)
-  parser.add_argument("--block_size", type=int, default=1024)
-
-  parser.add_argument("--num_nodes", type=int, default=1)
-  parser.add_argument("--device", type=str, default="cpu")
-  parser.add_argument("--epochs", type=int, default=1)
-  parser.add_argument(
-    "--model_size", type=str, default="small", choices=["small", "base", "medium", "large", "xl"]
-  )
-
-  parser.add_argument("--batch_size", type=int, default=16)
-  parser.add_argument("--minibatch_size", type=int, default=None)
-  parser.add_argument("--lr", type=float, default=0.001)
-  parser.add_argument("--max_norm", type=float, default=1.0)
-  parser.add_argument("--warmup_steps", type=int, default=1000)
-  parser.add_argument("--max_steps", type=int, default=10000)
-  parser.add_argument("--cosine_anneal", action='store_true')
-
-  parser.add_argument("--seed", type=int, default=1337)
-  parser.add_argument("--wandb_project", type=str, default=None)
-  parser.add_argument("--wandb_name", type=str, default=None)
-  parser.add_argument("--val_size", type=int, default=256)
-
+  parser = get_common_parser()
   return parser
 
 def main():
   parser = arg_parse()
   args = parser.parse_args()
-
-  # Set random seeds
-  torch.manual_seed(args.seed)
-  torch.cuda.manual_seed(args.seed)
-  np.random.seed(args.seed)
-
-  torch.backends.cuda.matmul.allow_tf32 = True
-  torch.backends.cudnn.allow_tf32 = True
 
   # Get datasets
   train_dataset, vocab_size = get_dataset(
