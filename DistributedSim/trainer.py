@@ -116,7 +116,7 @@ class LocalTrainer(Trainer):
     # initialize the process group
     if self.device == 'cuda':
         # If we haven't specified devices, use all devices.
-        if not self.devices:
+        if not hasattr(self, 'devices'):
             self.devices = range(torch.cuda.device_count())
 
         dist.init_process_group("nccl" if len(self.devices) == self.num_nodes else "gloo", 
