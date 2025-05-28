@@ -23,6 +23,9 @@ class Strategy:
         # Initialize scheduler as None; will be set after self.optim is defined in subclasses.
         self.scheduler = None
 
+        # List of callbacks to record learning rate changes.
+        self.lr_callbacks = []
+
     def _init_node(self, model, rank, num_nodes):
         self.model = model
         self.rank = rank
@@ -38,8 +41,10 @@ class Strategy:
 
         if self.scheduler is not None:
             self.scheduler.step()
-            # if self.rank == 0:
-            #     self.logger.log_lr(self.scheduler.get_last_lr()[0])
+
+            if self.rank == 0:
+                for callback in self.lr_callbacks:
+                    callback(self.scheduler.get_last_lr()[0])
 
         self.local_step += 1
 

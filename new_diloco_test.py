@@ -41,7 +41,8 @@ def main():
     batch_size=1,
     minibatch_size=1,
     val_size=1,
-    wandb_project='diloco-test'
+    wandb_project='diloco-test',
+    wandb_name='run_1'
   )
 
 if __name__ == '__main__':

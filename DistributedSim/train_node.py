@@ -52,7 +52,7 @@ class TrainNode:
         self.autocast = autocast
         self.checkpoint_interval = checkpoint_interval
 
-        self.wandb_project = kwargs.get('wandb_project', None)
+        self.kwargs = kwargs
 
         self.build_dataloaders()
 
@@ -60,7 +60,8 @@ class TrainNode:
         torch.manual_seed(seed)
         torch.cuda.manual_seed(seed)
 
-        print(f"model parameter count: ", self.model.get_num_params() / 1e6)
+        if self.rank == 0:
+            print(f"model parameter count: ", self.model.get_num_params() / 1e6)
 
         ## Ensure all process models share the same params
         if self.num_nodes > 1:
@@ -451,9 +452,12 @@ class TrainNode:
         self.strategy.max_steps = self.max_steps
 
         if self.rank == 0:
-            if self.wandb_project is not None:
+            if self.kwargs.get('wandb_project', None) is not None:
                 self.logger = WandbLogger(model=self.model, 
-                                    max_steps=self.max_steps)
+                                    max_steps=self.max_steps,
+                                    strategy=self.strategy,
+                                    wandb_project=self.kwargs.get('wandb_project', None),
+                                    wandb_name=self.kwargs.get('wandb_name', None))
             else:
                 self.logger = Logger(model=self.model, 
                                     max_steps=self.max_steps)

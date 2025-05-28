@@ -85,7 +85,6 @@ def extract_wandb_config(obj, max_depth=3, current_depth=0):
 
 def create_wandb_config(model: torch.nn.Module, 
                        strategy=None, 
-                       config=None, 
                        extra_config: Dict[str, Any] = None) -> Dict[str, Any]:
   """
   Create a comprehensive wandb configuration from model, strategy, and config objects.
@@ -99,6 +98,7 @@ def create_wandb_config(model: torch.nn.Module,
   Returns:
     dict: A complete wandb configuration dictionary
   """
+  ## TODO: Fix this up to log everything we need.
   wandb_config = {}
   
   # Model information
@@ -124,17 +124,17 @@ def create_wandb_config(model: torch.nn.Module,
       "strategy_name": strategy.__class__.__name__,
       "strategy_config": extract_wandb_config(strategy),
     })
-  
-  # Main configuration
-  if config:
-    config_dict = extract_wandb_config(config)
-    # Remove potentially problematic keys
-    keys_to_remove = ['model_class', 'train_dataset', 'val_dataset', 'model']
-    for key in keys_to_remove:
-      if key in config_dict:
-        del config_dict[key]
-    wandb_config.update(config_dict)
-  
+
+  # # Main configuration
+  # if config:
+  #   config_dict = extract_wandb_config(config)
+  #   # Remove potentially problematic keys
+  #   keys_to_remove = ['model_class', 'train_dataset', 'val_dataset', 'model']
+  #   for key in keys_to_remove:
+  #     if key in config_dict:
+  #       del config_dict[key]
+  #   wandb_config.update(config_dict)
+
   # Extra configuration
   if extra_config:
     for key, value in extra_config.items():
