@@ -7,24 +7,60 @@ import torch
 from typing import Optional
 
 from .communicate_optimize_strategy import CommunicateOptimizeStrategy, CommunicationModule
-from .mixins import OuterOptMixin
 from .optim import OptimSpec
 from .communicate import *
 
-class DiLoCoCommunicator(OuterOptMixin, CommunicationModule):
+class DiLoCoCommunicator(CommunicationModule):
   """
   Communication module for master-worker setup (like DiLoCo).
-  Inherits from OuterOptMixin to get master model functionality.
   """
   
   def __init__(self, 
                H: int=100, 
-               outer_optim_spec: Optional[OptimSpec] = None, 
+               outer_optim: Optional[OptimSpec] = None, 
                **kwargs):
-    super().__init__(outer_optim_spec=outer_optim_spec, **kwargs)
+    super().__init__(**kwargs)
+
+    if outer_optim is not None:
+      self.outer_optim_spec = outer_optim
+    else:
+      self.outer_optim_spec = OptimSpec(
+        torch.optim.SGD,
+        lr=0.7,
+        nesterov=True,
+        momentum=0.9)
 
     self.H = H
-  
+
+  def _average_models(self) -> None:
+    """Average model parameters across all nodes."""
+    for param in self.model.parameters():
+      all_reduce(param.data, op=dist.ReduceOp.SUM)
+      param.data /= self.num_nodes
+
+  def _broadcast_model_params(self) -> None:
+    """Broadcast model parameters from rank 0 to all other nodes."""
+    for param in self.model.parameters():
+      broadcast(param.data, src=0)
+
+  def _set_master_grad(self) -> None:
+    """Set gradients on master model based on difference between master and worker models."""
+    for name, param in self.master_model.named_parameters():
+      param.grad = param.data - self.model.state_dict()[name].data.to('cpu')
+
+  def _synchronize_master_model(self) -> None:
+    """Synchronize worker model with master model parameters."""
+    for name, param in self.model.named_parameters():
+      param.data = self.master_model.state_dict()[name].data.to(param.device)
+
+  def _init_master_model(self, model, rank):
+    """Initialize master model and outer optimizer (typically only on rank 0)."""
+    if rank == 0:
+      self.master_model = deepcopy(model).to("cpu")
+      for param in self.master_model.parameters():
+        param.requires_grad = True
+      self.outer_optimizer = self.outer_optim_spec.build(self.master_model)  
+
   def communicate(self, model, rank: int, num_nodes: int, local_step: int) -> None:
     """Perform master-worker communication."""
     if num_nodes > 1 and local_step % self.H == 0:
@@ -46,38 +82,38 @@ class DiLoCoCommunicator(OuterOptMixin, CommunicationModule):
       for param in model.parameters():
         broadcast(param.data, src=0)
 
+  def _init_node(self, model, rank, num_nodes):
+    self._init_master_model(model, rank)
+
+    self.model = model
+
+
 class DiLoCoStrategy(CommunicateOptimizeStrategy):
   def __init__(self, 
-               inner_optim_spec: Optional[OptimSpec] = None,
-               outer_optim_spec: Optional[OptimSpec] = None,
+               inner_optim: Optional[OptimSpec] = None,
+               outer_optim: Optional[OptimSpec] = None,
                H: int = 100,
                **kwargs):
     self.H = H
 
-    if inner_optim_spec is None:
-      inner_optim_spec = OptimSpec(torch.optim.AdamW)
-    
+    if inner_optim is None:
+      self.inner_optim_spec = OptimSpec(torch.optim.AdamW)
+    else:
+      self.inner_optim_spec = inner_optim
+
     # Create the master-worker communicator
-    communicator = DiLoCoCommunicator(H=H, outer_optim_spec=outer_optim_spec)
+    communicator = DiLoCoCommunicator(H=H, outer_optim=outer_optim)
     
     super().__init__(
-      optim_spec=inner_optim_spec,
       communication_modules=[communicator],
+      inner_optim=inner_optim,
       **kwargs
     )
     
     self.communicator = communicator
 
-  def _communicate(self):
-    """Apply communication modules at the specified frequency."""
-    if self.local_step % self.H == 0 and self.local_step > 0:
-      super()._communicate()
-
-  def _init_node(self, model, rank, num_nodes):
-    super()._init_node(model, rank, num_nodes)
+  # def _init_node(self, model, rank, num_nodes):
+  #   super()._init_node(model, rank, num_nodes)
     
-    # Initialize master model for DiLoCo in the communicator
-    self.communicator._init_master_model(model, rank)
-    
-    # Share references so the communicator can access the model
-    self.communicator.model = self.model
+  #   # Share references so the communicator can access the model
+  #   self.communicator.model = self.model

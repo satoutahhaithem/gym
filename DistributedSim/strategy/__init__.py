@@ -7,7 +7,6 @@ from .demo import *
 from .federated_averaging import *
 from .communicate_optimize_strategy import *
 from .sparta_diloco import *
-from .mixins import *
 
 __all__ = [
   'SimpleReduceStrategy', 
@@ -17,8 +16,6 @@ __all__ = [
   'FedAvgStrategy',
   'CommunicateOptimizeStrategy',
   'SPARTADiLoCoStrategy',
-  'OuterOptMixin',
-  'AveragingCommunicator',
-  'MasterWorkerCommunicator', 
-  'SparseCommunicator'
+  'SparseCommunicator',
+  'DiLoCoCommunicator'
 ]

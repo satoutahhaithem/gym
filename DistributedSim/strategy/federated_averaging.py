@@ -76,9 +76,12 @@ class AveragingCommunicator(CommunicationModule):
       
       self._average_models(model, island_members, num_nodes)
 
+  def _init_node(self, model, rank, num_nodes):
+    pass
+
 class FedAvgStrategy(CommunicateOptimizeStrategy):
     def __init__(self, 
-                 optim_spec: OptimSpec,
+                 inner_optim: Optional[OptimSpec] = None,
                  island_size: Optional[int] = None,
                  H: int = 1,
                  max_norm: float = None,
@@ -88,7 +91,7 @@ class FedAvgStrategy(CommunicateOptimizeStrategy):
         averaging_comm = AveragingCommunicator(island_size=island_size)
         
         super().__init__(
-            optim_spec=optim_spec,
+            inner_optim=inner_optim,
             communication_modules=[averaging_comm],
             max_norm=max_norm,
             **kwargs

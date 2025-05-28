@@ -9,8 +9,9 @@ from .optim import OptimSpec
 class CommunicationModule(ABC):
   """Abstract base class for communication modules."""
   
-  def __init__(self, strategy=None):
-    self.strategy = strategy
+  @abstractmethod
+  def __init__(self):
+    pass
   
   @abstractmethod
   def communicate(self, model, rank: int, num_nodes: int, local_step: int) -> None:
@@ -25,6 +26,13 @@ class CommunicationModule(ABC):
     """
     pass
 
+  @abstractmethod
+  def _init_node(self, model, rank: int, num_nodes: int) -> None:
+    """
+    Initialize the communication module for the given model.
+    """
+    pass
+
 class CommunicateOptimizeStrategy(Strategy):
   """
   Base strategy class for algorithms that separate local optimization 
@@ -36,13 +44,17 @@ class CommunicateOptimizeStrategy(Strategy):
   """
   
   def __init__(self, 
-               optim_spec: OptimSpec,
                communication_modules: List[CommunicationModule],
+               inner_optim: Optional[OptimSpec] = None,
                max_norm: Optional[float] = None,
                **kwargs):
     super().__init__(**kwargs)
     
-    self.optim_spec = optim_spec
+    if inner_optim is None:
+      self.inner_optim_spec = OptimSpec(torch.optim.AdamW)
+    else:
+      self.inner_optim_spec = inner_optim
+
     self.communication_modules = communication_modules
     self.max_norm = max_norm
     
@@ -70,6 +82,9 @@ class CommunicateOptimizeStrategy(Strategy):
 
   def _init_node(self, model, rank, num_nodes):
     super()._init_node(model, rank, num_nodes)
+
+    for comm_module in self.communication_modules:
+      comm_module._init_node(model, rank, num_nodes)
     
-    self.optim = self.optim_spec.build(model)
+    self.optim = self.inner_optim_spec.build(model)
     self._setup_scheduler() 

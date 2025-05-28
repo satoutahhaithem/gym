@@ -4,7 +4,7 @@ import torch.distributed as dist
 from torch import nn
 import copy
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from .communicate_optimize_strategy import CommunicateOptimizeStrategy, CommunicationModule
 from .optim import OptimSpec
@@ -40,9 +40,12 @@ class SparseCommunicator(CommunicationModule):
 
         self.iteration += 1
 
+    def _init_node(self, model, rank, num_nodes):
+        pass
+
 class SPARTAStrategy(CommunicateOptimizeStrategy):
     def __init__(self, 
-                 optim_spec: OptimSpec,
+                 inner_optim: Optional[OptimSpec] = None,
                  p_sparta=0.005,
                  **kwargs):
 
@@ -51,13 +54,12 @@ class SPARTAStrategy(CommunicateOptimizeStrategy):
         sparse_comm = SparseCommunicator(index_selector)
         
         super().__init__(
-            optim_spec=optim_spec,
+            inner_optim=inner_optim,
             communication_modules=[sparse_comm],
             **kwargs
         )
 
         self.index_selector = index_selector
-
 
 class IndexSelector:
     def __init__(self, p):
