@@ -14,7 +14,7 @@ class DiLoCoStrategy(Strategy):
     def __init__(self, 
                 inner_optim_spec: Optional[OptimSpec] = None,
                 outer_optim_spec: Optional[OptimSpec] = None,
-                diloco_interval: int = 100,
+                H: int = 100,
                 **kwargs):
 
         super().__init__(**kwargs)
@@ -35,7 +35,7 @@ class DiLoCoStrategy(Strategy):
                 nesterov=True,
                 momentum=0.9)
 
-        self.diloco_interval = diloco_interval
+        self.H = H
 
 
     def _average_models(self) -> None:
@@ -64,7 +64,7 @@ class DiLoCoStrategy(Strategy):
         self.optim.step()
 
         # Outer step if needed.
-        if self.local_step % self.diloco_interval == 0 and self.local_step > 0:
+        if self.local_step % self.H == 0 and self.local_step > 0:
             self._average_models()
 
             if self.rank == 0:

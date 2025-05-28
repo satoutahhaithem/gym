@@ -1,7 +1,9 @@
 from DistributedSim.trainer import LocalTrainer
 
-# from DistributedSim.strategy.sparta import SPARTAStrategy
+from DistributedSim.strategy.sparta import SPARTAStrategy
 from DistributedSim.strategy.diloco import DiLoCoStrategy
+from DistributedSim.strategy.federated_averaging import FedAvgStrategy
+from DistributedSim.strategy.demo import DeMoStrategy
 
 from DistributedSim.models.nanogpt import GPT, GPTConfig
 from DistributedSim.dataset.nanogpt.dataset import get_dataset
@@ -26,10 +28,9 @@ def main():
     lr=0.001
   )
 
-  strategy = DiLoCoStrategy(
-    inner_optim_spec=optim,
-    # outer_optim_spec=outer_optim,
-    diloco_interval=10,
+  strategy = FedAvgStrategy(
+    optim_spec=optim,
+    H=10,
     lr_scheduler='lambda_cosine',
     lr_scheduler_kwargs={
       'warmup_steps': 100,
