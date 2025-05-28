@@ -1,7 +1,7 @@
 from torch.optim.lr_scheduler import LambdaLR
 
 import math
-
+import torch
 import torch.nn.utils as nn_utils
 
 from typing import Dict, Any
@@ -97,10 +97,25 @@ class Strategy(LogModule):
         return config
 
 class SimpleReduceStrategy(Strategy):
-    def __init__(self, rank, model, config, logger=None):
-        super().__init__(rank, model, config, logger)
-        self.optim = self.strategy_config.optimizer_class(model.parameters(), 
-                                                          **self.strategy_config.optimizer_kwargs)
+    def __init__(self, 
+                 optim_spec=None,
+                 max_norm=None,
+                 **kwargs):
+        super().__init__(**kwargs)
+        
+        if optim_spec is not None:
+            self.optim_spec = optim_spec
+        else:
+            # Import OptimSpec here to avoid circular imports
+            from .optim import OptimSpec
+            self.optim_spec = OptimSpec(torch.optim.AdamW)
+            
+        self.max_norm = max_norm
+
+    def _init_node(self, model, rank, num_nodes):
+        super()._init_node(model, rank, num_nodes)
+        
+        self.optim = self.optim_spec.build(model)
         self._setup_scheduler()
 
     def step(self):
@@ -110,8 +125,8 @@ class SimpleReduceStrategy(Strategy):
                     all_reduce(param.grad)
                     param.grad.div_(self.num_nodes)
 
-            if self.strategy_config.max_norm:
-                nn_utils.clip_grad_norm_(self.model.parameters(), max_norm=self.strategy_config.max_norm)
+            if self.max_norm:
+                nn_utils.clip_grad_norm_(self.model.parameters(), max_norm=self.max_norm)
 
         self.optim.step()
 
