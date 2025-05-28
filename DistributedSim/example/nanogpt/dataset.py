@@ -61,16 +61,16 @@ def load_data_concurrent(start_pc, end_pc, max_workers=8):
 
     return np.concatenate(data)
 
-def get_dataset(dataset_name, block_size, storage_device, compute_device, start_pc=0.0, end_pc=1.0):
+def get_dataset(dataset_name, block_size, device, start_pc=0.0, end_pc=1.0):
     if dataset_name != 'owt':
         data, vocab_size = build_dataset(dataset_name, block_size, start_pc=start_pc, end_pc=end_pc)
 
-        dataset = ContiguousGPTTrainDataset(data, block_size=block_size, storage_device=storage_device, compute_device=compute_device)
+        dataset = ContiguousGPTTrainDataset(data, block_size=block_size, device=device)
     else:
         # For OWT, pull from S3
         data = load_data_concurrent(start_pc, end_pc)
         vocab_size = 50257
 
-        dataset = NonContiguousGPTTrainDataset(data, storage_device=storage_device, compute_device=compute_device)
+        dataset = NonContiguousGPTTrainDataset(data, device=device)
 
     return dataset, vocab_size

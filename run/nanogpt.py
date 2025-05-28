@@ -1,16 +1,12 @@
-import torch
+from DistributedSim.trainer import LocalTrainer
+from DistributedSim.strategy.strategy import Strategy
+from DistributedSim.example.nanogpt.nanogpt import GPT, GPTConfig
+from DistributedSim.example.nanogpt.dataset import get_dataset
+from DistributedSim.strategy.optim import OptimSpec
 
+import torch
 import argparse
 import numpy as np
-
-from DistributedSim.sim_builder import *
-from DistributedSim.sim_config import *
-from DistributedSim.strategy.strategy import *
-
-from DistributedSim.models.nanogpt import GPT, GPTConfig
-from DistributedSim.dataset.nanogpt.build_dataset import *
-from DistributedSim.dataset.nanogpt.dataset import get_dataset
-from DistributedSim.dataset.dataset import DatasetConfig
 
 def gen_wandb_name(args):
     name = f"bs{args.batch_size}_lr{args.lr:.0e}_warm{args.warmup_steps}_max{args.max_steps}"
@@ -25,12 +21,13 @@ def arg_parse():
         help="which dataset to use (shakespeare, wikitext, code, owt)"
     )
     parser.add_argument("--start_pc", type=float, default=0.0)
-    parser.add_argument("--end_pc", type=float, default=1.0)
+    parser.add_argument("--end_pc", type=float, default=0.9)
+    parser.add_argument("--val_start_pc", type=float, default=0.9)
+    parser.add_argument("--val_end_pc", type=float, default=1.0)
     parser.add_argument("--block_size", type=int, default=1024)
 
     parser.add_argument("--num_nodes", type=int, default=1)
-    parser.add_argument("--device_type", type=str, default="")
-    parser.add_argument("--devices", type=int, nargs="+", default=None)
+    parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument(
         "--model_size", type=str, default="small", choices=["small", "base", "medium", "large", "xl"]
@@ -43,22 +40,19 @@ def arg_parse():
     parser.add_argument("--warmup_steps", type=int, default=1000)
     parser.add_argument("--max_steps", type=int, default=10000)
     parser.add_argument("--cosine_anneal", action='store_true')
-    parser.add_argument("--autocast", action='store_true')
 
-    parser.add_argument("--checkpoint_dir", type=str, default="checkpoints")
-    parser.add_argument("--checkpoint_interval", type=int, default=None)
     parser.add_argument("--seed", type=int, default=1337)
-    parser.add_argument("--eval_interval", type=int, default=100)
     parser.add_argument("--wandb_project", type=str, default=None)
     parser.add_argument("--wandb_name", type=str, default=None)
     parser.add_argument("--val_size", type=int, default=256)
-    parser.add_argument("--dataset_proportion", type=float, default=1.0)
-    parser.add_argument("--val_proportion", type=float, default=0.1)
-    parser.add_argument("--correlation_interval", type=int, default=None)
 
     return parser
 
-def gen_gpt_config(args):
+def main():
+    parser = arg_parse()
+    args = parser.parse_args()
+
+    # Set random seeds
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -66,55 +60,63 @@ def gen_gpt_config(args):
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
 
-    gpt_config = GPTConfig.gpt2_size_map(args.model_size)
-
-    return gpt_config
-
-def config_gen(args, gpt_config):
-    config = SimConfig(
-        model_class=GPT,
-        model_config=gpt_config,
-
-        num_epochs=args.epochs,
-        num_nodes=args.num_nodes,
-        device_type=args.device_type,
-        devices=args.devices,
-        autocast=args.autocast,
-
-        minibatch_size=args.minibatch_size if args.minibatch_size else args.batch_size,
-        block_size=args.block_size,
-        val_size=args.val_size,
-        save_dir=args.checkpoint_dir,
-        checkpoint_interval=args.checkpoint_interval,
-        eval_interval=args.eval_interval,
-        correlation_interval=args.correlation_interval,
-
-        strategy_config=StrategyConfig(
-            optimizer_class=torch.optim.AdamW,
-            optimizer_kwargs={
-                'lr': args.lr,
-            },
-            max_norm=args.max_norm,
-            lr_scheduler='lambda_cosine',
-            warmup_steps=args.warmup_steps,
-            cosine_anneal=args.cosine_anneal,
-            max_local_steps=args.max_steps,        
-        ),
-
-        dataset_config=DatasetConfig(
-            dataset_load_fn=get_dataset,
-            dataset_name=args.dataset,
-            batch_size=args.batch_size,
-            device=args.device_type,
-            block_size=args.block_size,
-            dataset_proportion=args.dataset_proportion,
-            val_proportion=args.val_proportion,
-            gpt_config=gpt_config,
-        ),
-
-        seed=args.seed,
-        wandb_project=args.wandb_project,
-        wandb_name=args.wandb_name if args.wandb_name else gen_wandb_name(args),
+    # Get datasets
+    train_dataset, vocab_size = get_dataset(
+        args.dataset, 
+        block_size=args.block_size, 
+        device='cpu', 
+        start_pc=args.start_pc, 
+        end_pc=args.end_pc
+    )
+    val_dataset, vocab_size = get_dataset(
+        args.dataset, 
+        block_size=args.block_size, 
+        device='cpu', 
+        start_pc=args.val_start_pc, 
+        end_pc=args.val_end_pc
     )
 
-    return config
+    # Create model
+    gpt_config = GPTConfig.gpt2_size_map(args.model_size)
+    gpt_config.vocab_size = vocab_size
+    model = GPT(gpt_config)
+
+    # Create trainer
+    trainer = LocalTrainer(
+        model, 
+        train_dataset, 
+        val_dataset, 
+    )
+
+    # Create optimizer spec
+    optim = OptimSpec(
+        torch.optim.AdamW,
+        lr=args.lr
+    )
+
+    # Create strategy (base strategy for this file)
+    strategy = Strategy(
+        optim_spec=optim,
+        lr_scheduler='lambda_cosine',
+        lr_scheduler_kwargs={
+            'warmup_steps': args.warmup_steps,
+            'cosine_anneal': args.cosine_anneal
+        },
+        max_norm=args.max_norm
+    )
+
+    # Train
+    trainer.fit(
+        num_epochs=args.epochs,
+        strategy=strategy,
+        num_nodes=args.num_nodes,
+        device=args.device,
+        batch_size=args.batch_size,
+        minibatch_size=args.minibatch_size or args.batch_size,
+        val_size=args.val_size,
+        wandb_project=args.wandb_project,
+        wandb_name=args.wandb_name or gen_wandb_name(args)
+    )
+
+if __name__ == '__main__':
+    main()
