@@ -28,6 +28,7 @@ class TrainNode:
                  device: torch.device,
                  rank: int,
                  num_nodes: int,
+                 num_epochs: int,
                  batch_size: int = 16, 
                  minibatch_size: int = 16,
                  val_size: int = 64, 
@@ -43,7 +44,7 @@ class TrainNode:
         self.device = device
         self.rank = rank
         self.num_nodes = num_nodes
-
+        self.num_epochs = num_epochs
         self.batch_size = batch_size
         self.minibatch_size = minibatch_size
         self.val_size = val_size
@@ -137,7 +138,6 @@ class TrainNode:
             self._save_checkpoint()
 
     def _evaluate(self):
-        ## TODO: Split evaluation across nodes ?
         model_clone = copy.deepcopy(self.model)
 
         for name, param in model_clone.named_parameters():
@@ -446,8 +446,8 @@ class TrainNode:
 
         return corr_value # Only rank 0 returns a value, others return None
 
-    def train(self, num_epochs: int):
-        self.max_steps = num_epochs * len(self.train_dataloader)
+    def train(self):
+        self.max_steps = self.num_epochs * len(self.train_dataloader)
         self.strategy.max_steps = self.max_steps
 
         if self.rank == 0:

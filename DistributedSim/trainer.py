@@ -60,7 +60,7 @@ class Trainer:
     self._build_connection()
 
     self.train_dataset = self._get_split_dataset(self.train_dataset, rank, self.num_nodes)
-    self.val_dataset = self._get_split_dataset(self.val_dataset, rank, self.num_nodes)
+    self.val_dataset = self.val_dataset
 
     self.model = copy.deepcopy(self.model).to(self.device)
 
@@ -76,6 +76,7 @@ class Trainer:
       self.device,
       self.rank,
       self.num_nodes,
+      num_epochs=self.num_epochs,
       batch_size=self.batch_size,
       minibatch_size=self.minibatch_size,
       val_size=self.val_size,
@@ -85,7 +86,7 @@ class Trainer:
       **self.kwargs
     )
 
-    sim.train(num_epochs=self.num_epochs)
+    sim.train()
 
     self._process_cleanup()
 
@@ -106,16 +107,12 @@ class LocalTrainer(Trainer):
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = str(12355 + (10 if self.device == 'cpu' else 0))
 
-    print('a', self.device)
-
     if self.device == '' and torch.cuda.is_available():
         self.device = 'cuda'
     elif self.device == '' and torch.backends.mps.is_available():
         self.device = 'mps' 
     elif self.device == '':
         self.device = 'cpu'
-
-    print('b', self.device)
 
     # initialize the process group
     if self.device == 'cuda':
