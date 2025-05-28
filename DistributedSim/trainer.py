@@ -67,7 +67,6 @@ class Trainer:
     self.strategy = copy.deepcopy(self.strategy)
     self.strategy._init_node(self.model, self.rank, self.num_nodes)
 
-    # TODO: What is our separation between the constructor and the train method?
     sim = TrainNode(
       self.model,
       self.train_dataset,

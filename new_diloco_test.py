@@ -1,6 +1,7 @@
 from DistributedSim.trainer import LocalTrainer
 
-from DistributedSim.strategy.sparta import SPARTAStrategy
+# from DistributedSim.strategy.sparta import SPARTAStrategy
+from DistributedSim.strategy.diloco import DiLoCoStrategy
 
 from DistributedSim.models.nanogpt import GPT, GPTConfig
 from DistributedSim.dataset.nanogpt.dataset import get_dataset
@@ -24,14 +25,26 @@ def main():
     torch.optim.AdamW,
     lr=0.001
   )
-  strategy = SPARTAStrategy(
-    optim_spec=optim,
+
+  strategy = DiLoCoStrategy(
+    inner_optim_spec=optim,
+    # outer_optim_spec=outer_optim,
+    diloco_interval=10,
     lr_scheduler='lambda_cosine',
     lr_scheduler_kwargs={
       'warmup_steps': 100,
       'cosine_anneal': True
     }
   )
+
+  # strategy = SPARTAStrategy(
+  #   optim_spec=optim,
+  #   lr_scheduler='lambda_cosine',
+  #   lr_scheduler_kwargs={
+  #     'warmup_steps': 100,
+  #     'cosine_anneal': True
+  #   }
+  # )
 
   trainer.fit(
     num_epochs=1,

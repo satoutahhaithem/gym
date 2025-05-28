@@ -19,6 +19,8 @@ class Strategy(LogModule):
         self.lr_scheduler = lr_scheduler
         self.lr_scheduler_kwargs = lr_scheduler_kwargs
 
+        self.kwargs = kwargs
+
         for k, v in kwargs.items():
             setattr(self, k, v)
 

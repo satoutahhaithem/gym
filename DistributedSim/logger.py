@@ -56,7 +56,6 @@ class Logger:
     self.step += 1
 
   def log_lr(self, lr: float):
-    print(f'log_lr: {lr}')
     self.current_lr = lr
 
 

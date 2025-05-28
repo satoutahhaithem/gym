@@ -13,12 +13,10 @@ from .communicate import *
 class SPARTAStrategy(Strategy):
     def __init__(self, 
                  optim_spec: OptimSpec,
-                 lr_scheduler: str = None,
-                 lr_scheduler_kwargs: Dict[str, Any] = None,
-                 p_sparta=0.005):
+                 p_sparta=0.005,
+                 **kwargs):
 
-        super().__init__(lr_scheduler=lr_scheduler,
-                         lr_scheduler_kwargs=lr_scheduler_kwargs)
+        super().__init__(**kwargs)
 
         self.optim_spec = optim_spec
 
