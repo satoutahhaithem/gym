@@ -2,8 +2,18 @@ import torch
 import numpy as np
 from typing import Any, Dict, Union, List
 
+class LogModule:
+  def __config__(self, remove_keys: List[str] = None):
+    config = extract_config(self)
 
-def extract_wandb_config(obj, max_depth=3, current_depth=0):
+    if remove_keys:
+      for key in remove_keys:
+        if key in config:
+          del config[key]
+
+    return config
+
+def extract_config(obj, max_depth=10, current_depth=0):
   """
   Extract serializable configuration from an object for wandb logging.
   
@@ -31,7 +41,7 @@ def extract_wandb_config(obj, max_depth=3, current_depth=0):
   # Handle sequences (but avoid strings which are also sequences)
   if isinstance(obj, (list, tuple)) and not isinstance(obj, str):
     try:
-      return [extract_wandb_config(item, max_depth, current_depth + 1) for item in obj[:10]]  # Limit to first 10 items
+      return [extract_config(item, max_depth, current_depth + 1) for item in obj[:10]]  # Limit to first 10 items
     except:
       return f"<{type(obj).__name__} with {len(obj)} items>"
       
@@ -41,14 +51,17 @@ def extract_wandb_config(obj, max_depth=3, current_depth=0):
       result = {}
       for key, value in obj.items():
         if isinstance(key, str) and len(result) < 50:  # Limit number of keys
-          result[key] = extract_wandb_config(value, max_depth, current_depth + 1)
+          result[key] = extract_config(value, max_depth, current_depth + 1)
       return result
     except:
       return f"<dict with {len(obj)} items>"
       
+  if isinstance(obj, torch.device):
+    return obj.__str__()
+
   # Skip unpickleable types
   if isinstance(obj, (torch.Tensor, torch.nn.Module, torch.optim.Optimizer, 
-                     torch.nn.Parameter, torch.dtype, torch.device)):
+                     torch.nn.Parameter, torch.dtype)):
     if isinstance(obj, torch.Tensor):
       return f"<Tensor {list(obj.shape)}>"
     elif isinstance(obj, torch.nn.Module):
@@ -69,7 +82,7 @@ def extract_wandb_config(obj, max_depth=3, current_depth=0):
       for key, value in obj.__dict__.items():
         if not key.startswith('_') and len(result) < 50:  # Skip private attributes
           try:
-            result[key] = extract_wandb_config(value, max_depth, current_depth + 1)
+            result[key] = extract_config(value, max_depth, current_depth + 1)
           except:
             result[key] = f"<error extracting {key}>"
       return result
@@ -78,34 +91,40 @@ def extract_wandb_config(obj, max_depth=3, current_depth=0):
       
   # For other objects, try to get basic info
   try:
+    print(obj, type(obj))
+    if type(obj) in [float, int, str, bool]:
+      return obj
+    else:
+      return f"<{type(obj).__name__}>"
     return f"<{type(obj).__name__}>"
   except:
     return "<unknown object>"
 
 
-def create_wandb_config(model: torch.nn.Module, 
-                       strategy=None, 
-                       extra_config: Dict[str, Any] = None) -> Dict[str, Any]:
+def create_config(model: torch.nn.Module,
+                  strategy,
+                  train_node,
+                  extra_config: Dict[str, Any] = None) -> Dict[str, Any]:
   """
   Create a comprehensive wandb configuration from model, strategy, and config objects.
   
   Args:
-    model: The PyTorch model
-    strategy: The training strategy object (optional)
-    config: The main configuration object (optional)
+    modules: List of modules to include in the config. Each module admits a config() method.
     extra_config: Additional configuration to include (optional)
     
   Returns:
     dict: A complete wandb configuration dictionary
   """
-  ## TODO: Fix this up to log everything we need.
   wandb_config = {}
   
+  wandb_config['strategy'] = strategy.__config__()
+  wandb_config.update(train_node.__config__())
+
   # Model information
   if model:
     wandb_config.update({
       "model_name": model.__class__.__name__,
-      "model_config": extract_wandb_config(model),
+      # "model_config": extract_config(model),
     })
     
     # Try to get parameter count
@@ -118,27 +137,10 @@ def create_wandb_config(model: torch.nn.Module,
     except:
       wandb_config["model_parameters"] = "unknown"
   
-  # Strategy information
-  if strategy:
-    wandb_config.update({
-      "strategy_name": strategy.__class__.__name__,
-      "strategy_config": extract_wandb_config(strategy),
-    })
-
-  # # Main configuration
-  # if config:
-  #   config_dict = extract_wandb_config(config)
-  #   # Remove potentially problematic keys
-  #   keys_to_remove = ['model_class', 'train_dataset', 'val_dataset', 'model']
-  #   for key in keys_to_remove:
-  #     if key in config_dict:
-  #       del config_dict[key]
-  #   wandb_config.update(config_dict)
-
   # Extra configuration
   if extra_config:
     for key, value in extra_config.items():
-      wandb_config[key] = extract_wandb_config(value)
+      wandb_config[key] = extract_config(value)
   
   return wandb_config
 
@@ -173,7 +175,7 @@ def log_model_summary(model: torch.nn.Module) -> Dict[str, Any]:
     
     # Model config if available
     if hasattr(model, 'config'):
-      summary["config"] = extract_wandb_config(model.config)
+      summary["config"] = extract_config(model.config)
     
     # Layer information
     layer_types = {}
@@ -204,6 +206,6 @@ def safe_log_dict(data: Dict[str, Any], prefix: str = "") -> Dict[str, Any]:
   
   for key, value in data.items():
     safe_key = f"{prefix}_{key}" if prefix else key
-    safe_dict[safe_key] = extract_wandb_config(value)
+    safe_dict[safe_key] = extract_config(value)
   
   return safe_dict 

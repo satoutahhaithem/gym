@@ -16,7 +16,7 @@ from .dataset.nanogpt.dataset import get_dataset
 
 # change to two-space indent instead of four-space (which is what it is at the moment)
 
-class TrainNode:
+class TrainNode(LogModule):
     '''
     Single node of distributed training process. Should be the same regardless of rank topology/architecture.
     '''
@@ -456,6 +456,7 @@ class TrainNode:
                 self.logger = WandbLogger(model=self.model, 
                                     max_steps=self.max_steps,
                                     strategy=self.strategy,
+                                    train_node=self,
                                     wandb_project=self.kwargs.get('wandb_project', None),
                                     wandb_name=self.kwargs.get('wandb_name', None))
             else:
@@ -483,3 +484,11 @@ class TrainNode:
 
         # if self.config.checkpoint_interval is not None:
         #     self._save_checkpoint()
+
+
+    def __config__(self):
+        remove_keys = ['model', 'train_dataloader', 'val_dataloader', 'strategy']
+
+        config = super().__config__(remove_keys=remove_keys)
+
+        return config

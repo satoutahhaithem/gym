@@ -8,7 +8,9 @@ from typing import Dict, Any
 
 from .communicate import *
 
-class Strategy:
+from DistributedSim.utils import *
+
+class Strategy(LogModule):
     def __init__(self,
                  lr_scheduler: str = None,
                  lr_scheduler_kwargs: Dict[str, Any] = None,
@@ -78,6 +80,19 @@ class Strategy:
         else:
             self.scheduler = None
 
+    def __config__(self):
+        remove_keys = ['iteration', 
+                       'local_step', 
+                       'lr_callbacks', 
+                       'model', 
+                       'optim',
+                       'scheduler']
+
+        config = super().__config__(remove_keys)
+
+        config['strategy'] = self.__class__.__name__
+
+        return config
 
 class SimpleReduceStrategy(Strategy):
     def __init__(self, rank, model, config, logger=None):

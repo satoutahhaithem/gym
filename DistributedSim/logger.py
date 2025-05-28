@@ -6,7 +6,7 @@ from torch import nn
 import os
 
 from .sim_config import *
-from .utils import extract_wandb_config, create_wandb_config
+from .utils import extract_config, create_config
 
 
 class Logger:
@@ -19,8 +19,6 @@ class Logger:
     self.pbar = tqdm(total=self.max_steps, initial=0)
 
     print(f'Logger initialized.')
-    ## TODO: More general get_num_params method
-    print(f'Model parameter count: {self.model.get_num_params() / 1e6}M')
 
     self.step = 0
     self.current_lr = 0
@@ -67,6 +65,7 @@ class WandbLogger(Logger):
                model: nn.Module,
                max_steps: int,
                strategy=None,
+               train_node=None,
                wandb_project: str = None,
                wandb_name: str = None):
     super().__init__(model, max_steps)
@@ -75,9 +74,10 @@ class WandbLogger(Logger):
     self.wandb_name = wandb_name or None
 
     # Create wandb configuration using the utility function
-    wandb_config = create_wandb_config(
+    wandb_config = create_config(
       model=model,
       strategy=strategy,
+      train_node=train_node,
       extra_config={
         "max_steps": max_steps,
       }
@@ -85,7 +85,7 @@ class WandbLogger(Logger):
 
     init_kwargs = {
       "project": self.wandb_project,
-      "name": self.wandb_name, # Can be None
+      "name": self.wandb_name,
       "config": wandb_config,
       "resume": "allow" # Allow resuming if possible, or create new
     }
@@ -101,17 +101,3 @@ class WandbLogger(Logger):
     self.pbar.refresh()
 
     strategy.lr_callbacks.append(self.log_lr)
-
-  def log_config_update(self, config_dict: dict, prefix: str = ""):
-    """
-    Log additional configuration to wandb during training.
-    
-    Args:
-      config_dict: Dictionary of configuration to log
-      prefix: Optional prefix for the keys
-    """
-    if hasattr(self, 'wandb_name'):
-      safe_config = extract_wandb_config(config_dict)
-      if prefix:
-        safe_config = {f"{prefix}_{k}": v for k, v in safe_config.items()}
-      wandb.config.update(safe_config)
