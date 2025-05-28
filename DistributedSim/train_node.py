@@ -12,8 +12,6 @@ from .strategy.strategy import *
 from .logger import *
 from .strategy.communicate import *
 
-from .dataset.nanogpt.dataset import get_dataset
-
 # change to two-space indent instead of four-space (which is what it is at the moment)
 
 class TrainNode(LogModule):

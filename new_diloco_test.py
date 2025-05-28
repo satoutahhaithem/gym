@@ -6,8 +6,8 @@ from DistributedSim.strategy.sparta_diloco import SPARTADiLoCoStrategy
 from DistributedSim.strategy.federated_averaging import FedAvgStrategy
 from DistributedSim.strategy.demo import DeMoStrategy
 
-from DistributedSim.models.nanogpt import GPT, GPTConfig
-from DistributedSim.dataset.nanogpt.dataset import get_dataset
+from example.nanogpt.nanogpt import GPT, GPTConfig
+from example.nanogpt.dataset import get_dataset
 from DistributedSim.strategy.optim import OptimSpec
 
 import torch

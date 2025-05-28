@@ -8,7 +8,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .build_dataset import build_dataset
 from .gpt_dataset import NonContiguousGPTTrainDataset, ContiguousGPTTrainDataset
-from DistributedSim.dataset.dataset import DatasetConfig
 
 def count_files_in_s3_folder(bucket_name, folder_prefix, s3_client):
     paginator = s3_client.get_paginator('list_objects_v2')
