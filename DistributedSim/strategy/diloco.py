@@ -6,87 +6,78 @@ import torch
 
 from typing import Optional
 
-from .strategy import Strategy
+from .communicate_optimize_strategy import CommunicateOptimizeStrategy, CommunicationModule
+from .mixins import OuterOptMixin
 from .optim import OptimSpec
 from .communicate import *
 
-class DiLoCoStrategy(Strategy):
-    def __init__(self, 
-                inner_optim_spec: Optional[OptimSpec] = None,
-                outer_optim_spec: Optional[OptimSpec] = None,
-                H: int = 100,
-                **kwargs):
+class DiLoCoCommunicator(OuterOptMixin, CommunicationModule):
+  """
+  Communication module for master-worker setup (like DiLoCo).
+  Inherits from OuterOptMixin to get master model functionality.
+  """
+  
+  def __init__(self, 
+               H: int=100, 
+               outer_optim_spec: Optional[OptimSpec] = None, 
+               **kwargs):
+    super().__init__(outer_optim_spec=outer_optim_spec, **kwargs)
 
-        super().__init__(**kwargs)
+    self.H = H
+  
+  def communicate(self, model, rank: int, num_nodes: int, local_step: int) -> None:
+    """Perform master-worker communication."""
+    if num_nodes > 1 and local_step % self.H == 0:
+      # First average all models
+      for param in model.parameters():
+        all_reduce(param.data, op=dist.ReduceOp.SUM)
+        param.data /= num_nodes
 
-        if inner_optim_spec is not None:
-            self.inner_optim_spec = inner_optim_spec
-        else:
-            self.inner_optim_spec = OptimSpec(
-                torch.optim.AdamW
-            )
+      # Master does outer optimization step
+      if rank == 0:
+        # This assumes the strategy has master model functionality
+        if hasattr(self, 'outer_optimizer') and hasattr(self, 'master_model'):
+          self.outer_optimizer.zero_grad()
+          self._set_master_grad()
+          self.outer_optimizer.step()
+          self._synchronize_master_model()
 
-        if outer_optim_spec is not None:
-            self.outer_optim_spec = outer_optim_spec
-        else:
-            self.outer_optim_spec = OptimSpec(
-                torch.optim.SGD,
-                lr=0.7,
-                nesterov=True,
-                momentum=0.9)
+      # Broadcast updated parameters
+      for param in model.parameters():
+        broadcast(param.data, src=0)
 
-        self.H = H
+class DiLoCoStrategy(CommunicateOptimizeStrategy):
+  def __init__(self, 
+               inner_optim_spec: Optional[OptimSpec] = None,
+               outer_optim_spec: Optional[OptimSpec] = None,
+               H: int = 100,
+               **kwargs):
+    self.H = H
 
+    if inner_optim_spec is None:
+      inner_optim_spec = OptimSpec(torch.optim.AdamW)
+    
+    # Create the master-worker communicator
+    communicator = DiLoCoCommunicator(H=H, outer_optim_spec=outer_optim_spec)
+    
+    super().__init__(
+      optim_spec=inner_optim_spec,
+      communication_modules=[communicator],
+      **kwargs
+    )
+    
+    self.communicator = communicator
 
-    def _average_models(self) -> None:
-        for param in self.model.parameters():
-            all_reduce(param.data, op=dist.ReduceOp.SUM)
-            param.data /= self.num_nodes
+  def _communicate(self):
+    """Apply communication modules at the specified frequency."""
+    if self.local_step % self.H == 0 and self.local_step > 0:
+      super()._communicate()
 
-    def _broadcast_model_params(self) -> None:
-        for param in self.model.parameters():
-            broadcast(param.data, src=0)
-
-    def _set_master_grad(self) -> None:
-        for name, param in self.master_model.named_parameters():
-            param.grad = param.data - self.model.state_dict()[name].data.to('cpu')
-
-    def _synchronize_master_model(self) -> None:
-        for name, param in self.model.named_parameters():
-            param.data = self.master_model.state_dict()[name].data.to(param.device)
-
-    def step(self):
-        if 'max_norm' in self.kwargs:
-            nn_utils.clip_grad_norm_(self.model.parameters(), max_norm=self.kwargs['max_norm'])
-
-        # We have just calculated the loss and done the backward pass. 
-        # Therefore we do inner step first.
-        self.optim.step()
-
-        # Outer step if needed.
-        if self.local_step % self.H == 0 and self.local_step > 0:
-            self._average_models()
-
-            if self.rank == 0:
-                self.outer_optimizer.zero_grad()
-                self._set_master_grad()
-                self.outer_optimizer.step()
-                self._synchronize_master_model()
-
-            self._broadcast_model_params()
-
-        super().step()
-
-    def _init_node(self, model, rank, num_nodes):
-        super()._init_node(model, rank, num_nodes)
-
-
-        if self.rank == 0:
-            self.master_model = deepcopy(model).to("cpu")
-            for param in self.master_model.parameters():
-                param.requires_grad = True
-
-            self.outer_optimizer = self.outer_optim_spec.build(self.master_model)
-
-        self.optim = self.inner_optim_spec.build(model)
-        self._setup_scheduler()
+  def _init_node(self, model, rank, num_nodes):
+    super()._init_node(model, rank, num_nodes)
+    
+    # Initialize master model for DiLoCo in the communicator
+    self.communicator._init_master_model(model, rank)
+    
+    # Share references so the communicator can access the model
+    self.communicator.model = self.model

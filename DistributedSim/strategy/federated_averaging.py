@@ -5,97 +5,105 @@ import random
 import torch
 from torch.nn import utils as nn_utils
 
-from typing import Optional
+from typing import Optional, Set
 
-from .strategy import Strategy
+from .communicate_optimize_strategy import CommunicateOptimizeStrategy, CommunicationModule
 from .optim import OptimSpec
 from .communicate import *
 
-class FedAvgStrategy(Strategy):
+class AveragingCommunicator(CommunicationModule):
+  """
+  Communication module that averages model parameters across nodes.
+  Used by FedAvg strategies.
+  """
+  
+  def __init__(self, island_size: Optional[int] = None, **kwargs):
+    super().__init__(**kwargs)
+    self.island_size = island_size
+  
+  def _select_partners(self, rank: int, num_nodes: int) -> Set[int]:
+    """Select partners for grouped federated averaging."""
+    world_size = num_nodes
+    
+    # Only rank 0 creates the island assignments
+    if rank == 0:
+      ranks = list(range(world_size))
+      random.shuffle(ranks)
+    else:
+      ranks = [None] * world_size
+
+    dist.broadcast_object_list(ranks, src=0)
+
+    islands = []
+    island_size = self.island_size if self.island_size is not None else num_nodes
+    for i in range(0, len(ranks), island_size):
+      islands.append(set(ranks[i:i+island_size]))
+    
+    # Find which island this rank belongs to
+    my_island = None
+    for island in islands:
+      if rank in island:
+        my_island = island
+        break
+    
+    return my_island
+
+  def _average_models(self, model, island_members: Set[int], num_nodes: int) -> None:
+    """Average model parameters across island members."""
+    for param in model.parameters():
+      if len(island_members) == num_nodes:
+        # Full averaging - more efficient
+        all_reduce(param.data, op=dist.ReduceOp.SUM)
+        param.data /= num_nodes
+      else:
+        # Partial averaging using all_gather
+        tensor_list = [torch.zeros_like(param.data) for _ in range(num_nodes)]
+        all_gather(tensor_list, param.data)
+        
+        # Compute average only from ranks in the same island
+        island_tensors = [tensor_list[rank] for rank in island_members]
+        island_average = sum(island_tensors) / len(island_tensors)
+        
+        param.data = island_average
+
+  def communicate(self, model, rank: int, num_nodes: int, local_step: int) -> None:
+    """Perform averaging communication."""
+    if num_nodes > 1:
+      if self.island_size is not None and self.island_size < num_nodes:
+        island_members = self._select_partners(rank, num_nodes)
+      else:
+        island_members = set(range(num_nodes))
+      
+      self._average_models(model, island_members, num_nodes)
+
+class FedAvgStrategy(CommunicateOptimizeStrategy):
     def __init__(self, 
                  optim_spec: OptimSpec,
                  island_size: Optional[int] = None,
                  H: int = 1,
                  max_norm: float = None,
                  **kwargs):
-        super().__init__(**kwargs)
-
-        self.optim_spec = optim_spec
+        
+        # Create the averaging communicator
+        averaging_comm = AveragingCommunicator(island_size=island_size)
+        
+        super().__init__(
+            optim_spec=optim_spec,
+            communication_modules=[averaging_comm],
+            max_norm=max_norm,
+            **kwargs
+        )
+        
         self.island_size = island_size
         self.H = H
-        self.max_norm = max_norm
 
-    def _select_partners(self):
-        """
-        Selects partners for goruped Federated Averaging. By default not used.
-        """
-        world_size = dist.get_world_size()
-        
-        # Only rank 0 creates the island assignments
-        islands = None
-        if self.rank == 0:
-            # Create a list of all rank numbers and shuffle it.
-            ranks = list(range(world_size))
-            ## TODO: Switch to pytorch shuffle.
-            random.shuffle(ranks)
-        else:
-            ## TODO: Switch to pytorch broadcast.
-            ranks = [None] * world_size
-
-        dist.broadcast_object_list(ranks, src=0)
-
-        islands = []
-        for i in range(0, len(ranks), self.island_size):
-            islands.append(set(ranks[i:i+self.island_size]))
-        
-        # Ugh seems so unoptimal but it's fine for now.
-        my_island = None
-        for island in islands:
-            if self.rank in island:
-                my_island = island
-                break
-        
-        # print(f'Rank {self.rank} has partners {my_island}')
-        
-        return my_island
-
-    def _average_models(self, island_members) -> None:
-        ## Average model parameters across all members in the island
-        for param in self.model.parameters():
-            ## At the moment we are doing a full all_gather - this will be optimized in a full-scale training implementation.
-            tensor_list = [torch.zeros_like(param.data) for _ in range(self.num_nodes)]
-            all_gather(tensor_list, param.data)
-            
-            # Compute average only from ranks in the same island
-            island_tensors = [tensor_list[rank] for rank in island_members]
-            island_average = sum(island_tensors) / len(island_tensors)
-            
-            param.data = island_average
-
-    def step(self):
-        if self.max_norm:
-            nn_utils.clip_grad_norm_(self.model.parameters(), max_norm=self.max_norm)
-
-        # We have just calculated the loss and done the backward pass. 
-        # Therefore we do inner step first.
-        self.optim.step()
-
-        # Outer step if needed.
+    def _communicate(self):
+        """Apply communication modules at the specified frequency."""
         if self.local_step % self.H == 0 and self.local_step > 0:
-            if self.island_size < self.num_nodes:
-                island_members = self._select_partners()
-            else:
-                island_members = list(range(self.num_nodes))
-
-            self._average_models(island_members)
-
-        super().step()
+            super()._communicate()
 
     def _init_node(self, model, rank, num_nodes):
         super()._init_node(model, rank, num_nodes)
 
         if self.island_size is None:
             self.island_size = num_nodes
-
-        self.optim = self.optim_spec.build(model)
-        self._setup_scheduler()

@@ -2,6 +2,7 @@ from DistributedSim.trainer import LocalTrainer
 
 from DistributedSim.strategy.sparta import SPARTAStrategy
 from DistributedSim.strategy.diloco import DiLoCoStrategy
+from DistributedSim.strategy.sparta_diloco import SPARTADiLoCoStrategy
 from DistributedSim.strategy.federated_averaging import FedAvgStrategy
 from DistributedSim.strategy.demo import DeMoStrategy
 
@@ -28,8 +29,10 @@ def main():
     lr=0.001
   )
 
-  strategy = FedAvgStrategy(
-    optim_spec=optim,
+  # strategy = FedAvgStrategy(
+  # strategy = DiLoCoStrategy(
+  strategy = SPARTADiLoCoStrategy(
+    inner_optim_spec=optim,
     H=10,
     lr_scheduler='lambda_cosine',
     lr_scheduler_kwargs={

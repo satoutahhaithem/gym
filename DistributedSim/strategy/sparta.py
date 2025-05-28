@@ -6,55 +6,58 @@ import copy
 
 from typing import Dict, Any
 
-from .strategy import Strategy
+from .communicate_optimize_strategy import CommunicateOptimizeStrategy, CommunicationModule
 from .optim import OptimSpec
 from .communicate import *
 
-class SPARTAStrategy(Strategy):
-    def __init__(self, 
-                 optim_spec: OptimSpec,
-                 p_sparta=0.005,
-                 **kwargs):
-
+class SparseCommunicator(CommunicationModule):
+    """
+    Communication module for sparse parameter communication (like SPARTA).
+    """
+    
+    def __init__(self, index_selector, **kwargs):
         super().__init__(**kwargs)
-
-        self.optim_spec = optim_spec
-
-        self.index_selector = RandomIndexSelector(p_sparta)
-        # self.index_selector = ShuffledSequentialIndexSelector(p_sparta)
+        self.index_selector = index_selector
         self.iteration = 0
 
-    def step(self):
-        # if self.strategy_config.max_norm:
-        #     norm = nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.strategy_config.max_norm)
-
-        self.optim.step()
-
-        if self.num_nodes > 1:
+    def communicate(self, model, rank: int, num_nodes: int, local_step: int) -> None:
+        """Perform sparse communication."""
+        if num_nodes > 1:
             with torch.no_grad():
-                for name, param in self.model.named_parameters():
+                for name, param in model.named_parameters():
                     if not param.requires_grad or param.grad is None:
                         continue
 
                     indices_mask = self.index_selector.get_indices(param, self.iteration)
 
-                    ## TODO: Apparently this doesn't work well with non-contiguous data
-                    broadcast(indices_mask, src=0) # Broadcasting a mask might be needed
-                    sparse_data = param.data[indices_mask] # Get data using the mask
-                    all_reduce(sparse_data, op=dist.ReduceOp.SUM) # This likely won't work as expected with masked, non-contiguous data
-                    sparse_data /= self.num_nodes
+                    # Broadcasting a mask might be needed
+                    broadcast(indices_mask, src=0)
+                    sparse_data = param.data[indices_mask]
+                    all_reduce(sparse_data, op=dist.ReduceOp.SUM)
+                    sparse_data /= num_nodes
 
                     param.masked_scatter_(indices_mask, sparse_data)
 
         self.iteration += 1
-        super().step()
 
-    def _init_node(self, model, rank, num_nodes):
-        super()._init_node(model, rank, num_nodes)
+class SPARTAStrategy(CommunicateOptimizeStrategy):
+    def __init__(self, 
+                 optim_spec: OptimSpec,
+                 p_sparta=0.005,
+                 **kwargs):
 
-        self.optim = self.optim_spec.build(model)
+        # Create index selector and sparse communicator
+        index_selector = RandomIndexSelector(p_sparta)
+        sparse_comm = SparseCommunicator(index_selector)
+        
+        super().__init__(
+            optim_spec=optim_spec,
+            communication_modules=[sparse_comm],
+            **kwargs
+        )
 
-        self._setup_scheduler()
+        self.index_selector = index_selector
+
 
 class IndexSelector:
     def __init__(self, p):
