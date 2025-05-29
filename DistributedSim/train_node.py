@@ -451,7 +451,7 @@ class TrainNode(LogModule):
         return corr_value # Only rank 0 returns a value, others return None
 
     def train(self):
-        self.max_steps = self.num_epochs * len(self.train_dataloader)
+        self.max_steps = self.num_epochs * len(self.train_dataloader) / (self.batch_size // self.minibatch_size)
         self.strategy.max_steps = self.max_steps
 
         if self.rank == 0:
