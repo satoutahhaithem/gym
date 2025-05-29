@@ -1,10 +1,6 @@
 from DistributedSim.trainer import LocalTrainer
 
-from DistributedSim.strategy.sparta import SPARTAStrategy
 from DistributedSim.strategy.diloco import DiLoCoStrategy
-from DistributedSim.strategy.sparta_diloco import SPARTADiLoCoStrategy
-from DistributedSim.strategy.federated_averaging import FedAvgStrategy
-from DistributedSim.strategy.demo import DeMoStrategy
 
 from DistributedSim.example.nanogpt.nanogpt import GPT, GPTConfig
 from DistributedSim.example.nanogpt.dataset import get_dataset
