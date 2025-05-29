@@ -13,8 +13,10 @@ from DistributedSim.strategy.optim import OptimSpec
 import torch
 
 def main():
-  train_dataset, vocab_size = get_dataset('shakespeare', block_size=1024, device='cpu', start_pc=0.0, end_pc=0.9)
-  val_dataset, vocab_size = get_dataset('shakespeare', block_size=1024, device='cpu', start_pc=0.9, end_pc=1.0)
+  # train_dataset, vocab_size = get_dataset('shakespeare', block_size=1024, device='cpu', start_pc=0.0, end_pc=0.9)
+  # val_dataset, vocab_size = get_dataset('shakespeare', block_size=1024, device='cpu', start_pc=0.9, end_pc=1.0)
+  train_dataset, vocab_size = get_dataset('owt', block_size=1024, device='cpu', start_pc=0.0, end_pc=0.01, max_chunks_in_memory=1)
+  val_dataset, vocab_size = get_dataset('owt', block_size=1024, device='cpu', start_pc=0.99, end_pc=1.0, max_chunks_in_memory=1)
 
   model = GPT(GPTConfig(n_layer=12, n_head=12, n_embd=768, vocab_size=vocab_size))
 
@@ -56,9 +58,9 @@ def main():
     strategy=strategy,
     num_nodes=4,
     device='mps',
-    batch_size=1,
-    minibatch_size=1,
-    val_size=1,
+    batch_size=16,
+    minibatch_size=16,
+    val_size=16,
     wandb_project='diloco-test',
     wandb_name='run_1'
   )

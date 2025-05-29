@@ -7,7 +7,7 @@ from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from DistributedSim.example.nanogpt.build_dataset import build_dataset
-from DistributedSim.example.nanogpt.gpt_dataset import NonContiguousGPTTrainDataset, ContiguousGPTTrainDataset
+from DistributedSim.example.nanogpt.gpt_dataset import NonContiguousGPTTrainDataset, ContiguousGPTTrainDataset, LazyNonContiguousGPTTrainDataset
 
 def count_files_in_s3_folder(bucket_name, folder_prefix, s3_client):
     paginator = s3_client.get_paginator('list_objects_v2')
@@ -61,16 +61,50 @@ def load_data_concurrent(start_pc, end_pc, max_workers=8):
 
     return np.concatenate(data)
 
-def get_dataset(dataset_name, block_size, device, start_pc=0.0, end_pc=1.0, max_workers=8):
+def preload_chunks_to_cache(start_pc, end_pc, max_workers=8):
+    """Preload chunks to local cache without loading them all into memory."""
+    s3_client = boto3.client('s3')
+    chunk_count = count_files_in_s3_folder('exo-datasets', 'owt/', s3_client)
+    chunk_ids = np.arange(chunk_count)
+    chunk_ids = chunk_ids[int(start_pc * chunk_count):int(end_pc * chunk_count)]
+
+    print(f'Preloading {len(chunk_ids)} chunks to cache in up to {max_workers} threads…')
+
+    cache_location = f'cache/s3/owt/'
+    if not os.path.exists(cache_location):
+        os.makedirs(cache_location, exist_ok=True)
+
+    # Check which chunks need to be downloaded
+    chunks_to_download = []
+    for chunk_id in chunk_ids:
+        cache_file = f'{cache_location}/chunk_{chunk_id}.npy'
+        if not os.path.exists(cache_file):
+            chunks_to_download.append(chunk_id)
+
+    if chunks_to_download:
+        print(f'Downloading {len(chunks_to_download)} missing chunks…')
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            # Submit download jobs for missing chunks
+            futures = {pool.submit(load_chunk, int(cid), s3_client): cid for cid in chunks_to_download}
+
+            # Wait for all downloads to complete
+            for f in tqdm(as_completed(futures), total=len(futures)):
+                f.result()  # This will download and cache the chunk
+    else:
+        print('All chunks already cached locally.')
+
+    return chunk_ids, cache_location
+
+def get_dataset(dataset_name, block_size, device, start_pc=0.0, end_pc=1.0, max_workers=8, max_chunks_in_memory=None):
     if dataset_name != 'owt':
         data, vocab_size = build_dataset(dataset_name, block_size, start_pc=start_pc, end_pc=end_pc)
 
         dataset = ContiguousGPTTrainDataset(data, block_size=block_size, device=device)
     else:
-        # For OWT, pull from S3
-        data = load_data_concurrent(start_pc, end_pc, max_workers=8)
+        # For OWT, preload chunks to cache but use lazy loading
+        chunk_ids, cache_location = preload_chunks_to_cache(start_pc, end_pc, max_workers=max_workers)
         vocab_size = 50257
 
-        dataset = NonContiguousGPTTrainDataset(data, device=device)
+        dataset = LazyNonContiguousGPTTrainDataset(chunk_ids, cache_location, device=device, max_chunks_in_memory=max_chunks_in_memory)
 
     return dataset, vocab_size

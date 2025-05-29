@@ -4,7 +4,6 @@ import numpy as np
 
 from DistributedSim.train_node import TrainNode
 from DistributedSim.strategy import Strategy
-from DistributedSim.partial_dataset import PartialLoadedDataset
 
 import os
 from abc import ABC, abstractmethod
@@ -89,7 +88,8 @@ class Trainer:
     self.strategy = copy.deepcopy(self.strategy)
     self.strategy._init_node(self.model, self.rank, self.num_nodes)
 
-    self.sampler = torch.utils.data.DistributedSampler(self.train_dataset, num_replicas=self.num_nodes, rank=self.rank, shuffle=True)
+    # self.sampler = torch.utils.data.DistributedSampler(self.train_dataset, num_replicas=self.num_nodes, rank=self.rank, shuffle=True)
+    self.sampler = torch.utils.data.DistributedSampler(self.train_dataset, num_replicas=self.num_nodes, rank=self.rank, shuffle=False)
 
     sim = TrainNode(
       self.model,
