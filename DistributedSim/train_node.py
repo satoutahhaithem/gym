@@ -7,10 +7,10 @@ import zipfile
 import os
 import copy
 
-from .sim_config import *
-from .strategy.strategy import *
-from .logger import *
+from .strategy.strategy import Strategy
+from .logger import Logger, WandbLogger
 from .strategy.communicate import *
+from .utils import LogModule
 
 # change to two-space indent instead of four-space (which is what it is at the moment)
 
@@ -113,7 +113,7 @@ class TrainNode(LogModule):
             batch = batch.to(self.device)
         
         end_time = time.time()
-        # print(f"Batch collection time: {end_time - start_time:.4f} seconds")
+        print(f"Batch collection time: {end_time - start_time:.4f} seconds")
         
         return batch
 
@@ -159,7 +159,6 @@ class TrainNode(LogModule):
             # For rank 1, we want to calculate the average model loss
             this_model = model_clone
 
-        
 
         if self.rank == 0 or self.rank == 1:
             this_model.eval()
@@ -491,9 +490,6 @@ class TrainNode(LogModule):
                 buffer = io.BytesIO()
                 pickle.dump(dataset, buffer, protocol=pickle.HIGHEST_PROTOCOL)
                 print(f"Dataset size: {buffer.tell() // 1024 // 1024} MB")
-            
-            print_dataset_size(self.train_dataset)
-            print_dataset_size(self.val_dataset)
 
 
         self._evaluate()

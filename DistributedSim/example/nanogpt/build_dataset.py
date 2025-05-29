@@ -1,9 +1,8 @@
 import torch
 import argparse
 import numpy as np
-import math
 import os
-from datasets import load_dataset, Dataset, DatasetDict, load_dataset_builder, concatenate_datasets
+from datasets import load_dataset, load_dataset_builder, concatenate_datasets
 
 def generate_char_vocab():
     """

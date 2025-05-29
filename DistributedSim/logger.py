@@ -1,9 +1,6 @@
-import wandb
 from tqdm import tqdm
 import numpy as np
-import torch
 from torch import nn
-import os
 
 from .sim_config import *
 from .utils import extract_config, create_config
@@ -24,33 +21,13 @@ class Logger:
     self.current_lr = 0
     
   def log(self, data: dict):
-    if hasattr(self, 'wandb_name'):
-      wandb.log(data, step=self.step)
+    pass
 
   def log_loss(self, loss: float, name: str):
-    if hasattr(self, 'wandb_name'):
-      data = {
-        f"{name}_loss": loss,
-        f"{name}_perplexity": float(np.exp(loss))
-      }
-      wandb.log(data, step=self.step)
+    pass
 
   def log_train(self, loss: float):
-    if hasattr(self, 'wandb_name'):
-      data = {
-        "train_loss": loss,
-        "train_perplexity": float(np.exp(loss)),
-      }
-      if self.current_lr:
-        data["lr"] = self.current_lr
-
-      wandb.log(data, step=self.step)
-
-    self.pbar.update(1)
-    self.pbar.set_postfix({
-      "train_loss": f"{loss:.4f}",
-      "lr": f"{self.current_lr:.6f}",
-    })
+    pass
 
   def increment_step(self):
     self.step += 1
@@ -67,6 +44,12 @@ class WandbLogger(Logger):
                train_node=None,
                wandb_project: str = None,
                wandb_name: str = None):
+
+    try:
+      import wandb
+    except ImportError:
+      raise ImportError("wandb is not installed. Please install it using `pip install wandb`.")
+
     super().__init__(model, max_steps)
     
     self.wandb_project = wandb_project
@@ -100,3 +83,30 @@ class WandbLogger(Logger):
     self.pbar.refresh()
 
     strategy.lr_callbacks.append(self.log_lr)
+
+  def log_loss(self, loss: float, name: str):
+    import wandb
+    if hasattr(self, 'wandb_name'):
+      data = {
+        f"{name}_loss": loss,
+        f"{name}_perplexity": float(np.exp(loss))
+      }
+      wandb.log(data, step=self.step)
+
+  def log_train(self, loss: float):
+    import wandb
+    if hasattr(self, 'wandb_name'):
+      data = {
+        "train_loss": loss,
+        "train_perplexity": float(np.exp(loss)),
+      }
+      if self.current_lr:
+        data["lr"] = self.current_lr
+
+      wandb.log(data, step=self.step)
+
+    self.pbar.update(1)
+    self.pbar.set_postfix({
+      "train_loss": f"{loss:.4f}",
+      "lr": f"{self.current_lr:.6f}",
+    })

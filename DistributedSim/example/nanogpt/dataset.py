@@ -1,13 +1,10 @@
-import torch
 import numpy as np
-import boto3
-import io
 import os
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from DistributedSim.example.nanogpt.build_dataset import build_dataset
-from DistributedSim.example.nanogpt.gpt_dataset import NonContiguousGPTTrainDataset, ContiguousGPTTrainDataset, LazyNonContiguousGPTTrainDataset
+from DistributedSim.example.nanogpt.gpt_dataset import ContiguousGPTTrainDataset, LazyNonContiguousGPTTrainDataset
 
 def count_files_in_s3_folder(bucket_name, folder_prefix, s3_client):
     paginator = s3_client.get_paginator('list_objects_v2')
@@ -30,6 +27,7 @@ def load_chunk(chunk_id, s3_client):
         return np.load(cache_file)
 
 def load_data(start_pc, end_pc):
+    import boto3
     s3_client = boto3.client('s3')
 
     chunk_count = count_files_in_s3_folder('exo-datasets', 'owt/', s3_client)
@@ -43,6 +41,7 @@ def load_data(start_pc, end_pc):
     return np.concatenate(data)
 
 def load_data_concurrent(start_pc, end_pc, max_workers=8):
+    import boto3
     s3_client = boto3.client('s3')
     chunk_count = count_files_in_s3_folder('exo-datasets', 'owt/', s3_client)
     chunk_ids = np.arange(chunk_count)
@@ -63,6 +62,7 @@ def load_data_concurrent(start_pc, end_pc, max_workers=8):
 
 def preload_chunks_to_cache(start_pc, end_pc, max_workers=8):
     """Preload chunks to local cache without loading them all into memory."""
+    import boto3
     s3_client = boto3.client('s3')
     chunk_count = count_files_in_s3_folder('exo-datasets', 'owt/', s3_client)
     chunk_ids = np.arange(chunk_count)
@@ -101,6 +101,11 @@ def get_dataset(dataset_name, block_size, device, start_pc=0.0, end_pc=1.0, max_
 
         dataset = ContiguousGPTTrainDataset(data, block_size=block_size, device=device)
     else:
+        try:
+            import boto3
+        except ImportError:
+            raise ImportError("boto3 is not installed. Please install it using `pip install boto3`.")
+
         # For OWT, preload chunks to cache but use lazy loading
         chunk_ids, cache_location = preload_chunks_to_cache(start_pc, end_pc, max_workers=max_workers)
         vocab_size = 50257
