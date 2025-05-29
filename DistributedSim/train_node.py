@@ -79,17 +79,20 @@ class TrainNode(LogModule):
         Builds dataloaders.
         """
         self.train_dataloader = DataLoader(self.train_dataset, 
-                          batch_size=self.batch_size,
+                          batch_size=self.minibatch_size,
                           sampler=self.train_sampler)
 
         self.val_dataloader = DataLoader(self.val_dataset, 
-                          batch_size=self.batch_size,
+                          batch_size=self.minibatch_size,
                           shuffle=True)
 
         self.train_data_iter = iter(self.train_dataloader)
         self.val_data_iter = iter(self.val_dataloader)
 
     def _get_batch(self, eval=False):
+        import time
+        start_time = time.time()
+        
         if not eval or self.val_data_iter is None:
             try:
                 batch = next(self.train_data_iter)
@@ -108,7 +111,10 @@ class TrainNode(LogModule):
             batch = tuple(x.to(self.device) for x in batch)
         else:
             batch = batch.to(self.device)
-
+        
+        end_time = time.time()
+        # print(f"Batch collection time: {end_time - start_time:.4f} seconds")
+        
         return batch
 
     def _train_step(self):
@@ -478,6 +484,16 @@ class TrainNode(LogModule):
             #     self._correlation_calculation()
 
             dist.barrier()
+
+            def print_dataset_size(dataset: torch.utils.data.Dataset):
+                import pickle, sys, io
+
+                buffer = io.BytesIO()
+                pickle.dump(dataset, buffer, protocol=pickle.HIGHEST_PROTOCOL)
+                print(f"Dataset size: {buffer.tell() // 1024 // 1024} MB")
+            
+            print_dataset_size(self.train_dataset)
+            print_dataset_size(self.val_dataset)
 
 
         self._evaluate()

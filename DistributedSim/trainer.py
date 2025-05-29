@@ -43,7 +43,8 @@ class Trainer:
           num_epochs: int,
           strategy: Strategy,
           num_nodes: int,
-          device: str,
+          device: str = None,
+          devices: list[int] = None,
           batch_size: int = 16,
           minibatch_size: int = 16,
           val_size: int = 64,
@@ -52,6 +53,7 @@ class Trainer:
           checkpoint_interval: int = 100,
           **kwargs):
     self.device = device
+    self.devices = devices
     self.strategy = strategy
     self.num_nodes = num_nodes
     self.num_epochs = num_epochs
@@ -131,17 +133,17 @@ class LocalTrainer(Trainer):
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = str(12355 + (10 if self.device == 'cpu' else 0))
 
-    if self.device == '' and torch.cuda.is_available():
+    if self.device == None and torch.cuda.is_available():
         self.device = 'cuda'
-    elif self.device == '' and torch.backends.mps.is_available():
+    elif self.device == None and torch.backends.mps.is_available():
         self.device = 'mps' 
-    elif self.device == '':
+    elif self.device == None:
         self.device = 'cpu'
 
     # initialize the process group
     if self.device == 'cuda':
         # If we haven't specified devices, use all devices.
-        if not hasattr(self, 'devices'):
+        if self.devices is None:
             self.devices = range(torch.cuda.device_count())
 
         dist.init_process_group("nccl" if len(self.devices) == self.num_nodes else "gloo", 
