@@ -85,6 +85,7 @@ def main():
   # Train
   trainer.fit(
     num_epochs=args.epochs,
+    max_steps=args.max_steps,
     strategy=strategy,
     num_nodes=args.num_nodes,
     device=args.device,

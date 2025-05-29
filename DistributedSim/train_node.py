@@ -28,6 +28,7 @@ class TrainNode(LogModule):
                  rank: int,
                  num_nodes: int,
                  num_epochs: int,
+                 max_steps: int,
                  batch_size: int = 16, 
                  minibatch_size: int = 16,
                  val_size: int = 64, 
@@ -45,6 +46,7 @@ class TrainNode(LogModule):
         self.rank = rank
         self.num_nodes = num_nodes
         self.num_epochs = num_epochs
+        self.max_steps = max_steps
         self.batch_size = batch_size
         self.minibatch_size = minibatch_size
         self.val_size = val_size
@@ -451,7 +453,9 @@ class TrainNode(LogModule):
         return corr_value # Only rank 0 returns a value, others return None
 
     def train(self):
-        self.max_steps = self.num_epochs * len(self.train_dataloader) / (self.batch_size // self.minibatch_size)
+        if self.max_steps is None:
+            self.max_steps = self.num_epochs * len(self.train_dataloader) / (self.batch_size // self.minibatch_size)
+
         self.strategy.max_steps = self.max_steps
 
         if self.rank == 0:
