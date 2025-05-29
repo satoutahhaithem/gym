@@ -62,9 +62,18 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-<!-- ## Usage
+## Technical Details
 
-```bash
-cd experiments
-python nanogpt_diloco.py --dataset shakespeare --char --num_nodes 2
-``` -->
+EXO Gym uses pytorch multiprocessing to a subprocess per-node, which are able to communicate with each other using regular operations such as `all_reduce`.
+
+### Model
+
+<!-- The model is expected -->
+
+### Dataset
+
+Recall that when we call `trainer.fit()`, $K$ subprocesses are spawned to handle each of the virtual workers. The `dataset` object is passed to every subprocess, and a `DistributedSampler` will be used to select indices per-node. If the dataset is entirely loaded into memory, this memory will be duplicated per-node - be careful not to run out of memory! If the dataset is larger, it should be lazily loaded.
+
+<!-- For further information, see individual pages on:
+
+- [Dataset](./docs/dataset.md) -->
