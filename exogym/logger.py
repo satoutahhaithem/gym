@@ -14,7 +14,7 @@ class Logger:
 
     self.pbar = tqdm(total=self.max_steps, initial=0)
 
-    print(f'Logger initialized.')
+    tqdm.write(f'Logger initialized.')
 
     self.step = 0
     self.current_lr = 0
@@ -26,7 +26,11 @@ class Logger:
     pass
 
   def log_train(self, loss: float):
-    pass
+    self.pbar.update(1)
+    self.pbar.set_postfix({
+      "train_loss": f"{loss:.4f}",
+      "lr": f"{self.current_lr:.6f}",
+    })
 
   def increment_step(self):
     self.step += 1
