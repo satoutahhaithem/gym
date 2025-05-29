@@ -85,7 +85,7 @@ class LazyNonContiguousGPTTrainDataset(torch.utils.data.Dataset):
     def _load_chunk(self, chunk_id):
         """Load chunk data if not already cached in memory"""
         if chunk_id not in self._loaded_chunks:
-            print(f'loading chunk {chunk_id}')
+            # print(f'loading chunk {chunk_id}')
             cache_file = f'{self.cache_location}/chunk_{chunk_id}.npy'
             chunk_data = np.load(cache_file)
             self._loaded_chunks[chunk_id] = torch.from_numpy(chunk_data).to(device=self.device).long()

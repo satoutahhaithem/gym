@@ -27,10 +27,9 @@ def main():
     lr=0.001
   )
 
-  strategy = FedAvgStrategy(
   # strategy = SPARTAStrategy(
   # strategy = SPARTADiLoCoStrategy(
-  # strategy = DiLoCoStrategy(
+  strategy = DiLoCoStrategy(
     inner_optim=optim,
     H=10,
     lr_scheduler='lambda_cosine',
