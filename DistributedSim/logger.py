@@ -2,7 +2,6 @@ from tqdm import tqdm
 import numpy as np
 from torch import nn
 
-from .sim_config import *
 from .utils import extract_config, create_config
 
 

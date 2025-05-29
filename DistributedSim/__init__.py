@@ -1,9 +1,6 @@
-# simulator/__init__.py
+# DistributedSim main package
 
-# from .sim_builder import SimBuilder, LocalSimBuilder
-# from .sim_config import SimConfig
 from .train_node import TrainNode
-from .trainer import Trainer
+from .trainer import Trainer, LocalTrainer
 
-# __all__ = ['SimBuilder', 'LocalSimBuilder', 'SimConfig', 'TrainNode']
-__all__ = ['TrainNode', 'Trainer']
+__all__ = ['TrainNode', 'Trainer', 'LocalTrainer']

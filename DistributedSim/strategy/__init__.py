@@ -1,22 +1,21 @@
 # simulator/__init__.py
 
-from .strategy import *
-# from .sparta import *
-# from .diloco import *
-# from .demo import *
-# from .federated_averaging import *
-# from .communicate_optimize_strategy import *
-# from .sparta_diloco import *
+from .strategy import Strategy
+from .diloco import DiLoCoStrategy
+from .optim import OptimSpec
+from .sparta import SPARTAStrategy
+from .federated_averaging import FedAvgStrategy
+from .communicate_optimize_strategy import CommunicateOptimizeStrategy
+from .sparta_diloco import SPARTADiLoCoStrategy
+from .demo import DeMoStrategy
 
 __all__ = [
-  'Strategy'
-  # 'SimpleReduceStrategy', 
-  # 'SPARTAStrategy', 
-  # 'DiLoCoStrategy', 
-  # 'DeMoStrategy',
-  # 'FedAvgStrategy',
-  # 'CommunicateOptimizeStrategy',
-  # 'SPARTADiLoCoStrategy',
-  # 'SparseCommunicator',
-  # 'DiLoCoCommunicator'
+  'Strategy',
+  'DiLoCoStrategy',
+  'OptimSpec', 
+  'SPARTAStrategy', 
+  'FedAvgStrategy',
+  'CommunicateOptimizeStrategy',
+  'SPARTADiLoCoStrategy',
+  'DeMoStrategy'
 ]
