@@ -58,7 +58,7 @@ class ModelWrapper(nn.Module):
   def forward(self, batch):
     imgs, labels = batch
     logits = self.backbone(imgs)
-    return logits, F.cross_entropy(logits, labels)
+    return F.cross_entropy(logits, labels)
 
 # ── 4. Training sweep ─────────────────────────────────────────────────────────
 def run_sweep():

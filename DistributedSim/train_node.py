@@ -123,9 +123,9 @@ class TrainNode(LogModule):
             ## TODO: Do we want this?
             if self.autocast:
                 with torch.autocast(device_type=self.device, dtype=torch.bfloat16):
-                    _, loss = self.model(minibatch)
+                    loss = self.model(minibatch)
             else:
-                _, loss = self.model(minibatch)
+                loss = self.model(minibatch)
 
             loss.backward()
 
@@ -171,9 +171,9 @@ class TrainNode(LogModule):
                         if self.autocast:
                             with torch.autocast(device_type=self.device, dtype=torch.bfloat16):
                                 ## TODO: Fix
-                                _, loss = this_model(minibatch)
+                                loss = this_model(minibatch)
                         else:
-                            _, loss = this_model(minibatch)
+                            loss = this_model(minibatch)
 
                         loss_total += loss.item() / (self.batch_size // self.minibatch_size)
 

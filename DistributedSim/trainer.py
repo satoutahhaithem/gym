@@ -52,11 +52,11 @@ class Trainer:
           autocast: bool = False,
           checkpoint_interval: int = 100,
           **kwargs):
-    self.device = device
-    self.devices = devices
+    self.num_epochs = num_epochs
     self.strategy = strategy
     self.num_nodes = num_nodes
-    self.num_epochs = num_epochs
+    self.device = device
+    self.devices = devices
 
     self.batch_size = batch_size
     self.minibatch_size = minibatch_size
