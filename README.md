@@ -68,7 +68,7 @@ EXO Gym uses pytorch multiprocessing to a subprocess per-node, which are able to
 
 ### Model
 
-<!-- The model is expected -->
+The model is expected in a form that takes a `batch` (the same format as `dataset` outputs), and returns a scalar loss over the entire batch. This ensures the model is agnostic to the format of the data (eg. masked LM training doesn't have a clear `x`/`y` split).
 
 ### Dataset
 
