@@ -65,11 +65,9 @@ class LazyNonContiguousGPTTrainDataset(torch.utils.data.Dataset):
 
     def _get_chunk_and_local_idx(self, global_idx):
         """Convert global index to (chunk_id, local_idx)"""
-        print(f'finding chunk for {global_idx}')
         for i, (chunk_id, offset, size) in enumerate(zip(self.chunk_ids, self.chunk_offsets, self.chunk_sizes)):
             if global_idx < offset + size:
                 local_idx = global_idx - offset
-                print(f'found chunk {chunk_id} with local index {local_idx}')
                 return chunk_id, local_idx
         raise IndexError(f"Index {global_idx} out of range")
 

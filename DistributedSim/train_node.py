@@ -31,7 +31,7 @@ class TrainNode(LogModule):
                  batch_size: int = 16, 
                  minibatch_size: int = 16,
                  val_size: int = 64, 
-                 eval_interval: int = 100,
+                 val_interval: int = 100,
                  checkpoint_interval: int = 100,
                  autocast: bool = False,
                  **kwargs):
@@ -48,7 +48,7 @@ class TrainNode(LogModule):
         self.batch_size = batch_size
         self.minibatch_size = minibatch_size
         self.val_size = val_size
-        self.eval_interval = eval_interval
+        self.val_interval = val_interval
         self.autocast = autocast
         self.checkpoint_interval = checkpoint_interval
 
@@ -59,9 +59,6 @@ class TrainNode(LogModule):
         seed = 42
         torch.manual_seed(seed)
         torch.cuda.manual_seed(seed)
-
-        if self.rank == 0:
-            print(f"model parameter count: ", self.model.get_num_params() / 1e6)
 
         ## Ensure all process models share the same params
         if self.num_nodes > 1:
@@ -113,7 +110,7 @@ class TrainNode(LogModule):
             batch = batch.to(self.device)
         
         end_time = time.time()
-        print(f"Batch collection time: {end_time - start_time:.4f} seconds")
+        # print(f"Batch collection time: {end_time - start_time:.4f} seconds")
         
         return batch
 
@@ -173,6 +170,7 @@ class TrainNode(LogModule):
 
                         if self.autocast:
                             with torch.autocast(device_type=self.device, dtype=torch.bfloat16):
+                                ## TODO: Fix
                                 _, loss = this_model(minibatch)
                         else:
                             _, loss = this_model(minibatch)
@@ -469,7 +467,7 @@ class TrainNode(LogModule):
                                     max_steps=self.max_steps)
 
         while self.local_step < self.max_steps:
-            if self.local_step % self.eval_interval == 0:
+            if self.local_step % self.val_interval == 0:
                 self._evaluate()
 
             self._train_step()

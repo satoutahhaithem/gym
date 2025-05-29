@@ -64,6 +64,8 @@ class WandbLogger(Logger):
       }
     )
 
+    print(f'initialized wandb project with model size {wandb_config["model_parameters"]}')
+
     init_kwargs = {
       "project": self.wandb_project,
       "name": self.wandb_name,

@@ -30,6 +30,8 @@ class Strategy(LogModule):
         # List of callbacks to record learning rate changes.
         self.lr_callbacks = []
 
+        self.max_steps = 1 # Needs to be initialized for first call of lr_lambda.
+
     def _init_node(self, model, rank, num_nodes):
         self.model = model
         self.rank = rank
@@ -58,7 +60,11 @@ class Strategy(LogModule):
     def _setup_scheduler(self):
         def lr_lambda(current_step):
             warmup_steps = self.lr_scheduler_kwargs.get('warmup_steps', 1)
-            max_steps = self.lr_scheduler_kwargs.get('max_steps', 1)
+            # If max steps not set, 
+            if 'max_steps' in self.lr_scheduler_kwargs:
+                max_steps = min(self.lr_scheduler_kwargs['max_steps'], self.max_steps)
+            else:
+                max_steps = self.max_steps
             cosine_anneal = self.lr_scheduler_kwargs.get('cosine_anneal', False)
 
             if current_step < warmup_steps:
@@ -115,8 +121,8 @@ class SimpleReduceStrategy(Strategy):
     def _init_node(self, model, rank, num_nodes):
         super()._init_node(model, rank, num_nodes)
         
-        self._setup_scheduler()
         self.optim = self.optim_spec.build(model)
+        self._setup_scheduler()
 
     def step(self):
         if self.num_nodes > 1 or True:
