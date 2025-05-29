@@ -28,7 +28,7 @@ class TrainNode(LogModule):
                  rank: int,
                  num_nodes: int,
                  num_epochs: int,
-                 max_steps: int,
+                 max_steps: int = None,
                  batch_size: int = 16, 
                  minibatch_size: int = 16,
                  val_size: int = 64, 

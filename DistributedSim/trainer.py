@@ -43,6 +43,7 @@ class Trainer:
           num_epochs: int,
           strategy: Strategy,
           num_nodes: int,
+          max_steps: int = None,
           device: str = None,
           devices: list[int] = None,
           batch_size: int = 16,
@@ -53,6 +54,7 @@ class Trainer:
           checkpoint_interval: int = 100,
           **kwargs):
     self.num_epochs = num_epochs
+    self.max_steps = max_steps
     self.strategy = strategy
     self.num_nodes = num_nodes
     self.device = device
@@ -103,6 +105,7 @@ class Trainer:
       self.rank,
       self.num_nodes,
       num_epochs=self.num_epochs,
+      max_steps=self.max_steps,
       batch_size=self.batch_size,
       minibatch_size=self.minibatch_size,
       val_size=self.val_size,
