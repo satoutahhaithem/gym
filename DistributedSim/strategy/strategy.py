@@ -115,8 +115,8 @@ class SimpleReduceStrategy(Strategy):
     def _init_node(self, model, rank, num_nodes):
         super()._init_node(model, rank, num_nodes)
         
-        self.optim = self.optim_spec.build(model)
         self._setup_scheduler()
+        self.optim = self.optim_spec.build(model)
 
     def step(self):
         if self.num_nodes > 1 or True:

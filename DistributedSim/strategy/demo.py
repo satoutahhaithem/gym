@@ -12,7 +12,6 @@ import torch
 import torch.fft
 import torch.distributed as dist
 
-from einops import rearrange
 from typing import Optional, Callable
 
 from .strategy import Strategy
@@ -26,6 +25,10 @@ class DeMoStrategy(Strategy):
                  compression_chunk: int = 64,
                  weight_decay: float = 0.0,
                  **kwargs):
+        try:
+            from einops import rearrange
+        except ImportError:
+            raise ImportError("einops is not installed. Please install it using `pip install einops`.")
         
         super().__init__(**kwargs)
         
@@ -265,6 +268,8 @@ class TransformDCT:
 
     @torch.no_grad()
     def encode(self, x):
+        from einops import rearrange
+
         if len(x.shape) > 1:  # 2D weights
             n1 = self.shape_dict[x.shape[0]]
             n2 = self.shape_dict[x.shape[1]]
@@ -290,6 +295,8 @@ class TransformDCT:
 
     @torch.no_grad()
     def decode(self, x):
+        from einops import rearrange
+
         if len(x.shape) > 2:  # 2D weights
             n1 = x.shape[2]
             n2 = x.shape[3]
@@ -325,6 +332,8 @@ class CompressDCT:
 
     @torch.no_grad()
     def compress(self, x, topk):
+        from einops import rearrange
+
         xshape = x.shape
         if len(x.shape) > 2:  # 2D weights
             x = rearrange(x, "y x h w -> y x (h w)")
@@ -340,6 +349,8 @@ class CompressDCT:
 
     @torch.no_grad()
     def decompress(self, p, idx, val, xshape, totalk):
+        from einops import rearrange
+
         x = torch.zeros(xshape, device=p.device, dtype=p.dtype)
 
         if len(xshape) > 2:  # 2D weights
