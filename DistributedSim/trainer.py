@@ -4,11 +4,25 @@ import numpy as np
 
 from DistributedSim.train_node import TrainNode
 from DistributedSim.strategy import Strategy
-from DistributedSim.partial_dataset import PartialDataset
+from DistributedSim.partial_dataset import PartialLoadedDataset
 
 import os
 from abc import ABC, abstractmethod
 import copy
+
+from typing import Tuple
+
+# def print_dataset_size(dataset: torch.utils.data.Dataset):
+#   from pympler import asizeof
+#   print(f"Dataset size: {asizeof.asizeof(dataset)}")
+
+def print_dataset_size(dataset: torch.utils.data.Dataset):
+  import pickle, sys, io
+
+  buffer = io.BytesIO()
+  pickle.dump(dataset, buffer, protocol=pickle.HIGHEST_PROTOCOL)
+  print(f"Dataset size: {buffer.tell() // 1024 // 1024} MB")
+
 
 class Trainer:
   '''
@@ -17,16 +31,15 @@ class Trainer:
   def __init__(self, 
               model: torch.nn.Module,
               train_dataset: torch.utils.data.Dataset,
-              val_dataset: torch.utils.data.Dataset):
+              val_dataset: torch.utils.data.Dataset,
+              lazily_load_dataset: bool = False):
     self.model = model
     self.train_dataset = train_dataset
     self.val_dataset = val_dataset
+    self.lazily_load_dataset = lazily_load_dataset
+
+    # print_dataset_size(self.train_dataset)
       
-  def _get_split_dataset(self, dataset: torch.utils.data.Dataset, rank: int, num_nodes: int):
-    # TODO: Split dataset properly. Potentially we can have a subsampling dataset class.
-    return PartialDataset(dataset, rank, num_nodes)
-
-
   def fit(self,
           num_epochs: int,
           strategy: Strategy,
@@ -69,17 +82,19 @@ class Trainer:
 
     self._build_connection()
 
-    self.train_dataset = self._get_split_dataset(self.train_dataset, rank, self.num_nodes)
-    self.val_dataset = self.val_dataset
+    # print_dataset_size(self.train_dataset)
 
     self.model = copy.deepcopy(self.model).to(self.device)
 
     self.strategy = copy.deepcopy(self.strategy)
     self.strategy._init_node(self.model, self.rank, self.num_nodes)
 
+    self.sampler = torch.utils.data.DistributedSampler(self.train_dataset, num_replicas=self.num_nodes, rank=self.rank, shuffle=True)
+
     sim = TrainNode(
       self.model,
       self.train_dataset,
+      self.sampler,
       self.val_dataset,
       self.strategy,
       self.device,

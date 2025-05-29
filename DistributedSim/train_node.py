@@ -21,6 +21,7 @@ class TrainNode(LogModule):
     def __init__(self, 
                  model: torch.nn.Module,
                  train_dataset: torch.utils.data.Dataset,
+                 train_sampler: torch.utils.data.Sampler,
                  val_dataset: torch.utils.data.Dataset,
                  strategy: Strategy,
                  device: torch.device,
@@ -37,6 +38,7 @@ class TrainNode(LogModule):
 
         self.model = model
         self.train_dataset = train_dataset
+        self.train_sampler = train_sampler
         self.val_dataset = val_dataset
         self.strategy = strategy
         self.device = device
@@ -78,7 +80,7 @@ class TrainNode(LogModule):
         """
         self.train_dataloader = DataLoader(self.train_dataset, 
                           batch_size=self.batch_size,
-                          shuffle=True)
+                          sampler=self.train_sampler)
 
         self.val_dataloader = DataLoader(self.val_dataset, 
                           batch_size=self.batch_size,
