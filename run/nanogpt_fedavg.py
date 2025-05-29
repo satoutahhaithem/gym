@@ -1,8 +1,8 @@
-from DistributedSim.trainer import LocalTrainer
-from DistributedSim.strategy.federated_averaging import FedAvgStrategy
-from DistributedSim.example.nanogpt.nanogpt import GPT, GPTConfig
-from DistributedSim.example.nanogpt.dataset import get_dataset
-from DistributedSim.strategy.optim import OptimSpec
+from exogym.trainer import LocalTrainer
+from exogym.strategy.federated_averaging import FedAvgStrategy
+from exogym.example.nanogpt.nanogpt import GPT, GPTConfig
+from exogym.example.nanogpt.dataset import get_dataset
+from exogym.strategy.optim import OptimSpec
 from common_args import get_common_parser
 
 import torch
@@ -78,6 +78,7 @@ def main():
   # Train
   trainer.fit(
     num_epochs=args.epochs,
+    max_steps=args.max_steps,
     strategy=strategy,
     num_nodes=args.num_nodes,
     device=args.device,

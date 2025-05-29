@@ -8,9 +8,11 @@ from typing import Dict, Any
 
 from .communicate import *
 
-from DistributedSim.utils import *
+from exogym.utils import *
 
-class Strategy(LogModule):
+from abc import ABC, abstractmethod
+
+class Strategy(ABC, LogModule):
     def __init__(self,
                  lr_scheduler: str = None,
                  lr_scheduler_kwargs: Dict[str, Any] = None,
@@ -39,9 +41,7 @@ class Strategy(LogModule):
 
         self.local_step = 0
 
-        # TODO: Ensure we clean state.
-
-    # @abstractmethod
+    @abstractmethod
     def step(self):
         self.nbytes = 0
 

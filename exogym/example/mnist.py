@@ -1,9 +1,9 @@
 # mnist_compare_strategies_big.py  (2-space indent preserved ✨)
-from DistributedSim.trainer import LocalTrainer
-from DistributedSim.strategy.diloco import DiLoCoStrategy
-from DistributedSim.strategy.sparta import SPARTAStrategy
-from DistributedSim.strategy.strategy import SimpleReduceStrategy
-from DistributedSim.strategy.optim import OptimSpec
+from exogym.trainer import LocalTrainer
+from exogym.strategy.diloco import DiLoCoStrategy
+from exogym.strategy.sparta import SPARTAStrategy
+from exogym.strategy.strategy import SimpleReduceStrategy
+from exogym.strategy.optim import OptimSpec
 
 import torch, torch.nn as nn, torch.nn.functional as F
 from torchvision import datasets, transforms

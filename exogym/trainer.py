@@ -2,8 +2,8 @@ import torch
 import torch.distributed as dist
 import numpy as np
 
-from DistributedSim.train_node import TrainNode
-from DistributedSim.strategy import Strategy
+from exogym.train_node import TrainNode
+from exogym.strategy import Strategy
 
 import os
 from abc import ABC, abstractmethod

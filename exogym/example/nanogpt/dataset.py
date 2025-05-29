@@ -3,8 +3,8 @@ import os
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from DistributedSim.example.nanogpt.build_dataset import build_dataset
-from DistributedSim.example.nanogpt.gpt_dataset import ContiguousGPTTrainDataset, LazyNonContiguousGPTTrainDataset
+from exogym.example.nanogpt.build_dataset import build_dataset
+from exogym.example.nanogpt.gpt_dataset import ContiguousGPTTrainDataset, LazyNonContiguousGPTTrainDataset
 
 def count_files_in_s3_folder(bucket_name, folder_prefix, s3_client):
     paginator = s3_client.get_paginator('list_objects_v2')

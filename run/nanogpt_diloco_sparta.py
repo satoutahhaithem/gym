@@ -1,8 +1,8 @@
-from DistributedSim.trainer import LocalTrainer
-from DistributedSim.strategy.sparta_diloco import SPARTADiLoCoStrategy
-from DistributedSim.example.nanogpt.nanogpt import GPT, GPTConfig
-from DistributedSim.example.nanogpt.dataset import get_dataset
-from DistributedSim.strategy.optim import OptimSpec
+from exogym.trainer import LocalTrainer
+from exogym.strategy.sparta_diloco import SPARTADiLoCoStrategy
+from exogym.example.nanogpt.nanogpt import GPT, GPTConfig
+from exogym.example.nanogpt.dataset import get_dataset
+from exogym.strategy.optim import OptimSpec
 from common_args import get_common_parser
 
 import torch

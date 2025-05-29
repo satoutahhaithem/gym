@@ -1,10 +1,10 @@
-from DistributedSim.trainer import LocalTrainer
+from exogym.trainer import LocalTrainer
 
-from DistributedSim.strategy.diloco import DiLoCoStrategy
+from exogym.strategy.diloco import DiLoCoStrategy
 
-from DistributedSim.example.nanogpt.nanogpt import GPT, GPTConfig
-from DistributedSim.example.nanogpt.dataset import get_dataset
-from DistributedSim.strategy.optim import OptimSpec
+from exogym.example.nanogpt.nanogpt import GPT, GPTConfig
+from exogym.example.nanogpt.dataset import get_dataset
+from exogym.strategy.optim import OptimSpec
 
 import torch
 

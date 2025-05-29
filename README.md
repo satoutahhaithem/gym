@@ -40,27 +40,60 @@ trainer.fit(
 )
 ```
 
+## Installation
+
+### Basic Installation
+Install with core dependencies only:
+```bash
+pip install exogym
+```
+
+### Installation with Optional Features
+
+For experiment tracking with Weights & Biases:
+```bash
+pip install exogym[wandb]
+```
+
+For S3 dataset loading:
+```bash
+pip install exogym[s3]
+```
+
+For DeMo strategy support:
+```bash
+pip install exogym[demo]
+```
+
+For running examples:
+```bash
+pip install exogym[examples]
+```
+
+For all optional features:
+```bash
+pip install exogym[all]
+```
+
+For development:
+```bash
+pip install exogym[dev]
+```
+
+### Development Installation
+
+To install for development:
+```bash
+git clone https://github.com/MattyAB/DistributedSim.git
+cd DistributedSim
+pip install -e .[dev]
+```
+
 ## Codebase Structure
 
 - `Trainer`: Builds simulation environment. `Trainer` will spawn multiple `TrainNode` instances, connect them together, and starts the training run.
 - `TrainNode`: A single node (rank) running its own training loop. At each train step, instead of calling `optim.step()`, it calls `strategy.step()`.
 - `Strategy`: Abstract class for an optimization strategy, which both defines **how the nodes communicate** with each other and **how model weights are updated**. Typically, a gradient strategy will include an optimizer as well as a communication step. Sometimes (eg. DeMo), the optimizer step is comingled with the communication.
-
-## Installation
-
-### Using `pip`
-
-```bash
-pip install exogym
-```
-
-### From Source
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
-```
 
 ## Technical Details
 
