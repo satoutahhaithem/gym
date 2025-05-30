@@ -3,7 +3,7 @@ import os
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from .build_dataset import build_dataset
+from .build_dataset import build_dataset_small, build_dataset_owt
 from .gpt_dataset import ContiguousGPTTrainDataset, LazyNonContiguousGPTTrainDataset
 
 def count_files_in_s3_folder(bucket_name, folder_prefix, s3_client):
@@ -97,17 +97,11 @@ def preload_chunks_to_cache(start_pc, end_pc, max_workers=8):
 
 def get_dataset(dataset_name, block_size, device, start_pc=0.0, end_pc=1.0, max_workers=8, max_chunks_in_memory=None):
     if dataset_name != 'owt':
-        data, vocab_size = build_dataset(dataset_name, block_size, start_pc=start_pc, end_pc=end_pc)
+        data, vocab_size = build_dataset_small(dataset_name, block_size, start_pc, end_pc)
 
         dataset = ContiguousGPTTrainDataset(data, block_size=block_size, device=device)
     else:
-        try:
-            import boto3
-        except ImportError:
-            raise ImportError("boto3 is not installed. Please install it using `pip install boto3`.")
-
-        # For OWT, preload chunks to cache but use lazy loading
-        chunk_ids, cache_location = preload_chunks_to_cache(start_pc, end_pc, max_workers=max_workers)
+        data, vocab_size = preload_chunks_to_cache(start_pc, end_pc, max_workers=max_workers)
         vocab_size = 50257
 
         dataset = LazyNonContiguousGPTTrainDataset(chunk_ids, cache_location, device=device, max_chunks_in_memory=max_chunks_in_memory)

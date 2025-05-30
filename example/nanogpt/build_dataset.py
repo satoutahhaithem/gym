@@ -19,7 +19,133 @@ def generate_char_vocab():
     eos_token_id = char_int[eos_token]
     return char_int, eos_token_id
 
-def build_dataset(dataset, block_size=1024, start_pc=0.0, end_pc=1.0):
+def build_dataset_small(dataset, block_size=1024, start_pc=0.0, end_pc=1.0):
+  """
+  Loads and preprocesses the dataset with caching, using either a custom character-level tokenizer
+  or the GPT2 tokenizer. 
+
+  Args:
+      dataset: a string identifier ("shakespeare" or "wikitext")
+      block_size: the sequence block size.
+      char (bool): If True, use character-level tokenization; otherwise, use GPT-2 tokenization.
+  Returns:
+      data: a numpy array of the dataset.
+      vocab_size: the size of the vocabulary.
+  """
+  assert dataset in ['shakespeare', 'wikitext']
+
+  if dataset == 'shakespeare':
+    char = True
+  else:
+    char = False
+
+  # Decide cache locations based on tokenization mode and rank.
+  if char:
+    cache_dir = os.path.join("data", f"{dataset}_char")
+  else:
+    cache_dir = os.path.join("data", dataset)
+  os.makedirs(cache_dir, exist_ok=True)
+
+  data_cache_file = os.path.join(cache_dir, f"data_block{block_size}_{start_pc}_{end_pc}.npy")
+
+  if os.path.exists(data_cache_file):
+    print(f"Loading cached dataset from {data_cache_file}")
+    data = np.load(data_cache_file)
+    # Determine vocab size based on dataset type
+    if char:
+      char_int, eos_token_id = generate_char_vocab()
+      vocab_size = len(char_int)
+    else:
+      vocab_size = 50257  # GPT-2 vocab size
+    return data, vocab_size
+
+  print(f"Loading dataset: {dataset} {'(char-level)' if char else '(GPT2 tokenization)'} start%: {start_pc} end%: {end_pc}")
+  
+  # Determine the dataset identifier and mapping function.
+  if dataset == "shakespeare":
+    dataset_id = "Trelis/tiny-shakespeare"
+    mapping_fn = lambda x: {'text': x['Text']}
+    load_config = {}
+  elif dataset == "wikitext":
+    dataset_id = "wikitext"
+    config = "wikitext-2-raw-v1"
+    mapping_fn = lambda x: {'text': x['text']}
+    load_config = {"name": config}
+  else:
+    raise ValueError(f"Unknown dataset: {dataset}")
+
+  # Use the dataset builder to obtain the total number of records.
+  builder = load_dataset_builder(dataset_id, **load_config)
+  total_records = builder.info.splits["train"].num_examples + builder.info.splits["test"].num_examples
+
+  start_record = int(total_records * start_pc)
+  end_record = int(total_records * end_pc)
+
+  used_records = end_record - start_record
+  print(f"Using {used_records} records: {start_record} to {end_record}")
+
+  # Small enough dataset that we can load the whole thing in.
+  dataset = load_dataset(dataset_id, **load_config)
+  dataset = concatenate_datasets([dataset['train'], dataset['test']])
+
+  dataset = dataset.map(mapping_fn, remove_columns=dataset.column_names)
+
+  dataset = dataset.select(range(start_record, end_record))
+
+
+  ## Initialize the tokenizer.
+  if char:
+    char_int, eos_token_id = generate_char_vocab()
+    vocab_size = len(char_int)
+    def tokenize(example):
+      text = example['text']
+      if isinstance(text, str):
+        return {'tokenized': [char_int[c] for c in text]}
+      elif isinstance(text, list):
+        return {'tokenized': [[char_int[c] for c in t] for t in text]}
+      else:
+        raise Exception("Unknown type")
+  else:
+    from transformers import GPT2Tokenizer
+    tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+    if tokenizer.pad_token is None:
+      tokenizer.pad_token = tokenizer.eos_token
+    vocab_size = tokenizer.vocab_size
+    eos_token_id = tokenizer.eos_token_id
+    def tokenize(example):
+      return {'tokenized': tokenizer(example['text'], truncation=True, max_length=block_size)['input_ids']}
+
+  ## Tokenize the dataset.
+  dataset = dataset.map(
+    tokenize,
+    num_proc=os.cpu_count(),
+    batched=True
+  )
+
+  # Convert tokenized lists to 1-d contiguous stream.
+  def aggregate_examples(examples):
+    all_ids = np.concatenate([np.array(ids + [eos_token_id]) for ids in examples["tokenized"] if ids])
+    return {'ids': all_ids}
+
+  dataset_processed = dataset.map(
+    aggregate_examples,
+    batched=True,
+    remove_columns=dataset.column_names,
+    num_proc=os.cpu_count()
+  )
+
+  dataset_processed.set_format(type='numpy', columns=['ids'])
+
+  data = dataset_processed["ids"]
+
+  print(f"Dataset size: {data.shape}")
+
+  np.save(data_cache_file, data)
+
+  return data, vocab_size
+
+### TODO!
+def build_dataset_owt(dataset, block_size=1024, start_pc=0.0, end_pc=1.0):
     """
     Loads and preprocesses the dataset with caching, using either a custom character-level tokenizer
     or the GPT2 tokenizer. It uses only a fraction of the full dataset, as controlled by dataset_proportion,
@@ -27,7 +153,7 @@ def build_dataset(dataset, block_size=1024, start_pc=0.0, end_pc=1.0):
     When rank and world_size are provided, the training portion is sharded among nodes.
 
     Args:
-        dataset: a string identifier ("shakespeare", "wikitext", or "owt")
+        dataset: a string identifier ("shakespeare" or "wikitext")
         block_size: the sequence block size.
         char (bool): If True, use character-level tokenization; otherwise, use GPT-2 tokenization.
         start_pc (float): The start percentage of the dataset to use.
@@ -36,15 +162,13 @@ def build_dataset(dataset, block_size=1024, start_pc=0.0, end_pc=1.0):
     if dataset == 'shakespeare':
         char = True
     else:
-        char = False    
-
-    print(start_pc, end_pc)
+        char = False
 
     # Decide cache locations based on tokenization mode and rank.
     if char:
-        cache_dir = os.path.join("cache", f"{dataset}_char")
+        cache_dir = os.path.join("data", f"{dataset}_char")
     else:
-        cache_dir = os.path.join("cache", dataset)
+        cache_dir = os.path.join("data", dataset)
     os.makedirs(cache_dir, exist_ok=True)
 
     data_cache_file = os.path.join(cache_dir, f"data_block{block_size}_{start_pc}_{end_pc}.pt")
@@ -162,6 +286,7 @@ def build_dataset(dataset, block_size=1024, start_pc=0.0, end_pc=1.0):
     np.save(data_cache_file, data)
 
     return data, vocab_size
+
 
 def main():
     parser = argparse.ArgumentParser()
