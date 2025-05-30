@@ -24,7 +24,7 @@ def get_mnist_splits(root="data", train_frac=1.0):
   return full, None                       # val set handled separately
 
 # ── 2. Stronger CNN ───────────────────────────────────────────────────────────
-class BetterCNN(nn.Module):
+class CNN(nn.Module):
   def __init__(self):
     super().__init__()
     self.features = nn.Sequential(
@@ -76,7 +76,7 @@ def run_sweep():
     ("sparta", SPARTAStrategy),
     ("simplereduce", SimpleReduceStrategy),
   ]:
-    model   = ModelWrapper(BetterCNN())
+    model   = ModelWrapper(CNN())
     trainer = LocalTrainer(model, train_ds, val_ds)
 
     strategy = Strat(
@@ -96,8 +96,8 @@ def run_sweep():
       minibatch_size=256,
       val_size=len(val_ds), # evaluate on the full 10 000 test set
       val_interval=10,
-      wandb_project="mnist-compare",
-      wandb_name=f"{name}_big",
+      # wandb_project="mnist-compare",
+      # wandb_name=f"{name}_big",
     )
 
 if __name__ == "__main__":
