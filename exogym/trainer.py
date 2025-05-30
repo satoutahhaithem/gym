@@ -137,12 +137,13 @@ class LocalTrainer(Trainer):
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = str(12355 + (10 if self.device == 'cpu' else 0))
 
-    if self.device == None and torch.cuda.is_available():
+    if self.device == '' or self.device == None:
+      if torch.cuda.is_available():
         self.device = 'cuda'
-    elif self.device == None and torch.backends.mps.is_available():
+      elif torch.backends.mps.is_available():
         self.device = 'mps' 
-    elif self.device == None:
-        self.device = 'cpu'
+      else:
+          self.device = 'cpu'
 
     # initialize the process group
     if self.device == 'cuda':

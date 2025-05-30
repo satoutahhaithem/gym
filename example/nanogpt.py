@@ -44,11 +44,12 @@ def arg_parse():
 
   # Training arguments
   parser.add_argument("--num_nodes", type=int, default=1)
-  parser.add_argument("--device", type=str, default="cpu")
+  parser.add_argument("--device", type=str, default="")
   parser.add_argument("--epochs", type=int, default=1)
   parser.add_argument(
     "--model_size", type=str, default="small", choices=["small", "base", "medium", "large", "xl"]
   )
+  parser.add_argument("--dropout", type=float, default=None)
 
   # Optimization arguments
   parser.add_argument("--batch_size", type=int, default=16)
@@ -104,17 +105,7 @@ def create_strategy(args):
     'cosine_anneal': args.cosine_anneal
   }
   
-  if args.strategy == "base":
-    from exogym.strategy.strategy import Strategy
-    optim = OptimSpec(torch.optim.AdamW, lr=args.lr)
-    return Strategy(
-      optim_spec=optim,
-      lr_scheduler='lambda_cosine',
-      lr_scheduler_kwargs=lr_scheduler_kwargs,
-      max_norm=args.max_norm
-    )
-    
-  elif args.strategy == "ddp":
+  if args.strategy == "ddp" or args.strategy == "base" or args.strategy == "":
     from exogym.strategy.strategy import SimpleReduceStrategy
     optim = OptimSpec(torch.optim.AdamW, lr=args.lr)
     return SimpleReduceStrategy(
@@ -230,6 +221,8 @@ def main():
 
   # Create model
   gpt_config = GPTConfig.gpt2_size_map(args.model_size)
+  if args.dropout is not None:
+    gpt_config.dropout = args.dropout
   gpt_config.vocab_size = vocab_size
   model = GPT(gpt_config)
 
