@@ -2,7 +2,6 @@ import torch
 import argparse
 import numpy as np
 import os
-import json
 from datasets import load_dataset, load_dataset_builder, concatenate_datasets
 
 def generate_char_vocab():
@@ -161,57 +160,26 @@ def build_dataset_owt(start_pc=0.0, end_pc=1.0, max_workers=8):
     cache_dir = os.path.join("data", "owt")
     os.makedirs(cache_dir, exist_ok=True)
 
-    # Check if the dataset is already cached for the desired percentage range
-    metadata_file = os.path.join(cache_dir, "cache_metadata.json")
+    # Check if the chunks for this range already exist
+    target_chunks_for_full_dataset = 1000
+    start_chunk_id = int(start_pc * target_chunks_for_full_dataset)
+    end_chunk_id = int(end_pc * target_chunks_for_full_dataset)
+    expected_chunk_ids = list(range(start_chunk_id, end_chunk_id))
     
-    if os.path.exists(metadata_file):
-        with open(metadata_file, 'r') as f:
-            metadata = json.load(f)
-        
-        cached_start = metadata.get('start_pc', None)
-        cached_end = metadata.get('end_pc', None)
-        cached_chunks = metadata.get('num_chunks', 0)
-        vocab_size = metadata.get('vocab_size', 50257)
-        
-        # Check if requested range is within cached range
-        if (cached_start is not None and cached_end is not None and 
-            start_pc >= cached_start and end_pc <= cached_end):
-            
-            print(f"Using cached dataset from {start_pc} to {end_pc} (cached range: {cached_start} to {cached_end})")
-            
-            # Calculate which chunks to use from the cached data
-            cached_range = cached_end - cached_start
-            requested_range = end_pc - start_pc
-            
-            if cached_range > 0:
-                # Calculate start and end chunk indices
-                start_chunk_idx = int((start_pc - cached_start) / cached_range * cached_chunks)
-                end_chunk_idx = int((end_pc - cached_start) / cached_range * cached_chunks)
-                
-                # Ensure we don't go out of bounds
-                start_chunk_idx = max(0, start_chunk_idx)
-                end_chunk_idx = min(cached_chunks, end_chunk_idx)
-                
-                chunk_ids = list(range(start_chunk_idx, end_chunk_idx))
-                
-                # Verify chunks exist
-                missing_chunks = []
-                for chunk_id in chunk_ids:
-                    cache_file = f'{cache_dir}/chunk_{chunk_id}.npy'
-                    if not os.path.exists(cache_file):
-                        missing_chunks.append(chunk_id)
-                
-                if not missing_chunks:
-                    print(f"Using cached chunks {start_chunk_idx} to {end_chunk_idx-1}")
-                    return chunk_ids, cache_dir, vocab_size
-                else:
-                    print(f"Missing chunks {missing_chunks}, will re-download")
-            else:
-                print("Invalid cached range, will re-download")
-        else:
-            print(f"Requested range ({start_pc} to {end_pc}) extends beyond cached range ({cached_start} to {cached_end}), will re-download")
+    # Check if all required chunks exist
+    missing_chunks = []
+    for chunk_id in expected_chunk_ids:
+        cache_file = f'{cache_dir}/chunk_{chunk_id}.npy'
+        if not os.path.exists(cache_file):
+            missing_chunks.append(chunk_id)
+    
+    if not missing_chunks:
+        print(f"All chunks {start_chunk_id} to {end_chunk_id-1} already exist, using cached data")
+        # Still need to get vocab_size
+        vocab_size = 50257  # GPT-2 vocab size
+        return expected_chunk_ids, cache_dir, vocab_size
     else:
-        print("No cache metadata found, will download fresh")
+        print(f"Missing chunks {missing_chunks}, will download and process data")
 
     print(f"Loading dataset: owt {'(GPT2 tokenization)'} start%: {start_pc} end%: {end_pc}")
     
@@ -287,23 +255,17 @@ def build_dataset_owt(start_pc=0.0, end_pc=1.0, max_workers=8):
     
     print(f"Total blocks: {total_blocks}")
     
-    # Calculate number of chunks (aim for ~1000 chunks for 0.0-1.0 range)
-    # Scale based on the actual percentage range being processed
+    # Calculate number of chunks for this range
     range_pc = end_pc - start_pc
-    target_chunks_for_full_dataset = 1000
     num_chunks = max(1, int(target_chunks_for_full_dataset * range_pc))
     
     # Calculate blocks per chunk
     blocks_per_chunk = max(1, total_blocks // num_chunks)
     
     print(f"Creating {num_chunks} chunks with ~{blocks_per_chunk} blocks each")
+    print(f"Chunk IDs will range from {start_chunk_id} to {start_chunk_id + num_chunks - 1}")
     
-    # Clear existing cache files to avoid conflicts
-    for existing_file in os.listdir(cache_dir):
-        if existing_file.startswith('chunk_') and existing_file.endswith('.npy'):
-            os.remove(os.path.join(cache_dir, existing_file))
-    
-    # Create chunks and save them with simple numeric IDs
+    # Create chunks and save them with correct chunk IDs
     chunk_ids = []
     cache_location = cache_dir
     
@@ -320,8 +282,8 @@ def build_dataset_owt(start_pc=0.0, end_pc=1.0, max_workers=8):
             
         chunk_data = all_data[start_block:end_block]
         
-        # Use simple numeric chunk ID
-        chunk_id = chunk_idx
+        # Use correct chunk ID based on position in full dataset
+        chunk_id = start_chunk_id + chunk_idx
         chunk_ids.append(chunk_id)
         
         # Save chunk
@@ -329,21 +291,6 @@ def build_dataset_owt(start_pc=0.0, end_pc=1.0, max_workers=8):
         np.save(cache_file, chunk_data)
         
         print(f"Saved chunk {chunk_id} with {chunk_data.shape[0]} blocks to {cache_file}")
-
-    # Save metadata about this cache
-    metadata = {
-        'start_pc': start_pc,
-        'end_pc': end_pc,
-        'num_chunks': len(chunk_ids),
-        'vocab_size': vocab_size,
-        'total_blocks': total_blocks,
-        'blocks_per_chunk': blocks_per_chunk
-    }
-    
-    with open(metadata_file, 'w') as f:
-        json.dump(metadata, f, indent=2)
-    
-    print(f"Saved cache metadata: {metadata}")
 
     return chunk_ids, cache_location, vocab_size
 
