@@ -252,6 +252,7 @@ def main():
     device=args.device,
     batch_size=args.batch_size,
     minibatch_size=args.minibatch_size or args.batch_size,
+    shuffle=(args.dataset != 'owt'),
     val_size=args.val_size,
     wandb_project=args.wandb_project,
     wandb_name=args.wandb_name or gen_wandb_name(args, args.strategy)

@@ -48,6 +48,7 @@ class Trainer:
           devices: list[int] = None,
           batch_size: int = 16,
           minibatch_size: int = 16,
+          shuffle: bool = True,
           val_size: int = 64,
           eval_interval: int = 100,
           autocast: bool = False,
@@ -62,6 +63,7 @@ class Trainer:
 
     self.batch_size = batch_size
     self.minibatch_size = minibatch_size
+    self.shuffle = shuffle
     self.val_size = val_size
     self.eval_interval = eval_interval
     self.autocast = autocast
@@ -92,8 +94,7 @@ class Trainer:
     self.strategy = copy.deepcopy(self.strategy)
     self.strategy._init_node(self.model, self.rank, self.num_nodes)
 
-    # self.sampler = torch.utils.data.DistributedSampler(self.train_dataset, num_replicas=self.num_nodes, rank=self.rank, shuffle=True)
-    self.sampler = torch.utils.data.DistributedSampler(self.train_dataset, num_replicas=self.num_nodes, rank=self.rank, shuffle=False)
+    self.sampler = torch.utils.data.DistributedSampler(self.train_dataset, num_replicas=self.num_nodes, rank=self.rank, shuffle=self.shuffle)
 
     sim = TrainNode(
       self.model,
