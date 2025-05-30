@@ -10,7 +10,7 @@ import os
 from abc import ABC, abstractmethod
 import copy
 from dataclasses import dataclass
-from typing import Tuple, Optional, List, Any, Dict
+from typing import Tuple, Optional, List, Any, Dict, Union, Callable
 from collections import OrderedDict
 
 # def print_dataset_size(dataset: torch.utils.data.Dataset):
@@ -29,8 +29,8 @@ def print_dataset_size(dataset: torch.utils.data.Dataset):
 class TrainingConfig:
   """Configuration class that holds all training parameters for serialization."""
   model: torch.nn.Module
-  train_dataset: torch.utils.data.Dataset
-  val_dataset: torch.utils.data.Dataset
+  train_dataset: Union[torch.utils.data.Dataset, Callable[[int, int, bool], torch.utils.data.Dataset]]
+  val_dataset: Union[torch.utils.data.Dataset, Callable[[int, int, bool], torch.utils.data.Dataset]]
   strategy: Strategy
   num_epochs: int
   num_nodes: int
@@ -158,8 +158,8 @@ class Trainer:
   '''
   def __init__(self, 
               model: torch.nn.Module,
-              train_dataset: torch.utils.data.Dataset,
-              val_dataset: torch.utils.data.Dataset):
+              train_dataset: Union[torch.utils.data.Dataset, Callable[[int, int, bool], torch.utils.data.Dataset]],
+              val_dataset: Union[torch.utils.data.Dataset, Callable[[int, int, bool], torch.utils.data.Dataset]]):
     self.model = model
     self.train_dataset = train_dataset
     self.val_dataset = val_dataset
@@ -268,7 +268,14 @@ class Trainer:
     self.strategy = copy.deepcopy(self.strategy)
     self.strategy._init_node(self.model, self.rank, self.num_nodes)
 
-    self.sampler = torch.utils.data.DistributedSampler(self.train_dataset, num_replicas=self.num_nodes, rank=self.rank, shuffle=self.shuffle)
+    # Handle dataset factory vs direct dataset for sampler creation
+    if callable(self.train_dataset):
+      # For dataset factory, we don't need a distributed sampler
+      # since the factory should return the appropriate subset for this rank
+      self.sampler = None
+    else:
+      # For direct dataset, use DistributedSampler as before
+      self.sampler = torch.utils.data.DistributedSampler(self.train_dataset, num_replicas=self.num_nodes, rank=self.rank, shuffle=self.shuffle)
 
     sim = TrainNode(
       self.model,

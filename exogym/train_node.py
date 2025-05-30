@@ -6,6 +6,7 @@ import zipfile
 
 import os
 import copy
+from typing import Union, Callable
 
 from .strategy.strategy import Strategy
 from .logger import WandbLogger, CSVLogger
@@ -20,9 +21,9 @@ class TrainNode(LogModule):
     '''
     def __init__(self, 
                  model: torch.nn.Module,
-                 train_dataset: torch.utils.data.Dataset,
+                 train_dataset: Union[torch.utils.data.Dataset, Callable[[int, int, bool], torch.utils.data.Dataset]],
                  train_sampler: torch.utils.data.Sampler,
-                 val_dataset: torch.utils.data.Dataset,
+                 val_dataset: Union[torch.utils.data.Dataset, Callable[[int, int, bool], torch.utils.data.Dataset]],
                  strategy: Strategy,
                  device: torch.device,
                  rank: int,
@@ -38,9 +39,27 @@ class TrainNode(LogModule):
                  **kwargs):
 
         self.model = model
-        self.train_dataset = train_dataset
-        self.train_sampler = train_sampler
-        self.val_dataset = val_dataset
+        
+        # Handle dataset factory vs direct dataset for training
+        if callable(train_dataset):
+            # Call the dataset factory function with rank, num_nodes, and val=False
+            self.train_dataset = train_dataset(rank, num_nodes, False)
+            # When using dataset factory, we don't need a distributed sampler
+            # since the factory should return the appropriate subset
+            self.train_sampler = None
+        else:
+            # Use the dataset directly as before
+            self.train_dataset = train_dataset
+            self.train_sampler = train_sampler
+        
+        # Handle dataset factory vs direct dataset for validation
+        if callable(val_dataset):
+            # Call the dataset factory function with rank, num_nodes, and val=True
+            self.val_dataset = val_dataset(rank, num_nodes, True)
+        else:
+            # Use the dataset directly as before
+            self.val_dataset = val_dataset
+        
         self.strategy = strategy
         self.device = device
         self.rank = rank
@@ -77,13 +96,16 @@ class TrainNode(LogModule):
         """
         Builds dataloaders.
         """
+        # For dataset factory case (when sampler is None), we can enable shuffling
+        # For regular dataset case (when sampler is provided), shuffling is handled by the sampler
         self.train_dataloader = DataLoader(self.train_dataset, 
-                          batch_size=self.minibatch_size,
-                          sampler=self.train_sampler)
+                            batch_size=self.minibatch_size,
+                            sampler=self.train_sampler,
+                            shuffle=(self.train_sampler is None))
 
         self.val_dataloader = DataLoader(self.val_dataset, 
-                          batch_size=self.minibatch_size,
-                          shuffle=True)
+                            batch_size=self.minibatch_size,
+                            shuffle=True)
 
         self.train_data_iter = iter(self.train_dataloader)
         self.val_data_iter = iter(self.val_dataloader)
