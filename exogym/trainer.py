@@ -40,7 +40,7 @@ class TrainingConfig:
   minibatch_size: int = 16
   shuffle: bool = True
   val_size: int = 64
-  eval_interval: int = 100
+  val_interval: int = 100
   autocast: bool = False
   checkpoint_interval: int = 100
   trainer_class: type = None
@@ -74,7 +74,7 @@ def _worker(rank: int, config: TrainingConfig):
   trainer.minibatch_size = config.minibatch_size
   trainer.shuffle = config.shuffle
   trainer.val_size = config.val_size
-  trainer.eval_interval = config.eval_interval
+  trainer.val_interval = config.val_interval
   trainer.autocast = config.autocast
   trainer.checkpoint_interval = config.checkpoint_interval
   trainer.kwargs = config.kwargs
@@ -134,7 +134,7 @@ class Trainer:
           minibatch_size: int = 16,
           shuffle: bool = True,
           val_size: int = 64,
-          eval_interval: int = 100,
+          val_interval: int = 100,
           autocast: bool = False,
           checkpoint_interval: int = 100,
           **kwargs):
@@ -153,7 +153,7 @@ class Trainer:
     self.minibatch_size = minibatch_size
     self.shuffle = shuffle
     self.val_size = val_size
-    self.eval_interval = eval_interval
+    self.val_interval = val_interval
     self.autocast = autocast
     self.checkpoint_interval = checkpoint_interval
     self.kwargs = kwargs
@@ -186,7 +186,7 @@ class Trainer:
         minibatch_size=minibatch_size,
         shuffle=shuffle,
         val_size=val_size,
-        eval_interval=eval_interval,
+        val_interval=val_interval,
         autocast=autocast,
         checkpoint_interval=checkpoint_interval,
         trainer_class=self.__class__,
@@ -226,7 +226,7 @@ class Trainer:
       batch_size=self.batch_size,
       minibatch_size=self.minibatch_size,
       val_size=self.val_size,
-      eval_interval=self.eval_interval,
+      val_interval=self.val_interval,
       checkpoint_interval=self.checkpoint_interval,
       autocast=self.autocast,
       **self.kwargs
@@ -251,7 +251,7 @@ class LocalTrainer(Trainer):
     All ranks are assumed to be on the same machine, and device is defaulted to cpu.
     '''
     os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = str(12355 + (10 if self.device == 'cpu' else 0))
+    os.environ['MASTER_PORT'] = str(12356 + (10 if self.device == 'cpu' else 0))
 
     if self.device == '' or self.device == None:
       if torch.cuda.is_available():

@@ -97,7 +97,7 @@ def run_sweep():
       val_size=len(val_ds), # evaluate on the full 10 000 test set
       val_interval=10,
       # wandb_project="mnist-compare",
-      # wandb_name=f"{name}_big",
+      run_name=f"{name}_big",
     )
 
 if __name__ == "__main__":

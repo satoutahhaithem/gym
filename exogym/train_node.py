@@ -8,7 +8,7 @@ import os
 import copy
 
 from .strategy.strategy import Strategy
-from .logger import Logger, WandbLogger
+from .logger import WandbLogger, CSVLogger
 from .strategy.communicate import *
 from .utils import LogModule
 
@@ -182,7 +182,7 @@ class TrainNode(LogModule):
         # Rank 0 logs the local evaluation.
         if self.rank == 0:
             self.logger.log_loss(loss=loss_total / int(self.val_size / self.batch_size), 
-                                    name='val_local')
+                                    name='local')
 
         # Broadcast the global loss from rank 1 to all ranks.
         if self.num_nodes > 1:
@@ -202,10 +202,10 @@ class TrainNode(LogModule):
 
     def _save_checkpoint(self):
         return ## TODO
-        print(self.config.save_dir, self.config.wandb_project, self.config.wandb_name, self.rank)
+        print(self.config.save_dir, self.config.wandb_project, self.config.run_name, self.rank)
         save_path_dir = os.path.join(self.config.save_dir,
                                  self.config.wandb_project if self.config.wandb_project else 'unnamed',
-                                 self.config.wandb_name if self.config.wandb_name else 'unnamed',
+                                 self.config.run_name if self.config.run_name else 'unnamed',
                                  str(self.rank))
         if not os.path.exists(save_path_dir):
             os.makedirs(save_path_dir, exist_ok=True)
@@ -293,7 +293,7 @@ class TrainNode(LogModule):
         return ## TODO
         save_path_dir = os.path.join(self.config.save_dir,
                                  self.config.wandb_project if self.config.wandb_project else 'unnamed',
-                                 self.config.wandb_name if self.config.wandb_name else 'unnamed',
+                                 self.config.run_name if self.config.run_name else 'unnamed',
                                  str(self.rank))
 
         if not os.path.exists(save_path_dir):
@@ -465,11 +465,13 @@ class TrainNode(LogModule):
                                     strategy=self.strategy,
                                     train_node=self,
                                     wandb_project=self.kwargs.get('wandb_project', None),
-                                    wandb_name=self.kwargs.get('wandb_name', None))
+                                    run_name=self.kwargs.get('run_name', None))
             else:
-                self.logger = Logger(model=self.model, 
-                                    max_steps=self.max_steps)
-                self.strategy.lr_callbacks.append(self.logger.log_lr)
+                self.logger = CSVLogger(model=self.model, 
+                                    max_steps=self.max_steps,
+                                    strategy=self.strategy,
+                                    train_node=self,
+                                    run_name=self.kwargs.get('run_name', None))
 
         while self.local_step < self.max_steps:
             if self.local_step % self.val_interval == 0:

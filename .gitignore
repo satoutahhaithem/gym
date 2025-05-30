@@ -9,3 +9,4 @@ results/
 *.DS_Store
 dist/
 exogym.egg-info/
+logs/

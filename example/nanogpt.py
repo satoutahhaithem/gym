@@ -6,7 +6,7 @@ import argparse
 import torch
 import numpy as np
 
-def gen_wandb_name(args, strategy):
+def gen_run_name(args, strategy):
   """Generate wandb name based on strategy and arguments."""
   base_name = f"bs{args.batch_size}_lr{args.lr:.0e}"
   
@@ -63,8 +63,9 @@ def arg_parse():
   # Logging and reproducibility
   parser.add_argument("--seed", type=int, default=1337)
   parser.add_argument("--wandb_project", type=str, default=None)
-  parser.add_argument("--wandb_name", type=str, default=None)
+  parser.add_argument("--run_name", type=str, default=None)
   parser.add_argument("--val_size", type=int, default=256)
+  parser.add_argument("--val_interval", type=int, default=100)
 
   # Strategy selection
   parser.add_argument(
@@ -247,8 +248,10 @@ def main():
     minibatch_size=args.minibatch_size or args.batch_size,
     shuffle=(args.dataset != 'owt'),
     val_size=args.val_size,
+    val_interval=args.val_interval,
     wandb_project=args.wandb_project,
-    wandb_name=args.wandb_name or gen_wandb_name(args, args.strategy)
+    # run_name=args.run_name or gen_run_name(args, args.strategy)
+    run_name=None
   )
 
 if __name__ == '__main__':
