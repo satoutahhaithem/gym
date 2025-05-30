@@ -469,6 +469,7 @@ class TrainNode(LogModule):
             else:
                 self.logger = Logger(model=self.model, 
                                     max_steps=self.max_steps)
+                self.strategy.lr_callbacks.append(self.logger.log_lr)
 
         while self.local_step < self.max_steps:
             if self.local_step % self.val_interval == 0:
