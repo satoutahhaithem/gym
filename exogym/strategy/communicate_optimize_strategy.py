@@ -1,10 +1,11 @@
 import torch
 from torch.nn import utils as nn_utils
-from typing import List, Optional
+from typing import List, Optional, Union
 from abc import ABC, abstractmethod
 
 from .strategy import Strategy
-from .optim import OptimSpec
+from .optim import OptimSpec, ensure_optim_spec
+from .communicate import *
 
 class CommunicationModule(ABC):
   """Abstract base class for communication modules."""
@@ -35,8 +36,7 @@ class CommunicationModule(ABC):
 
 class CommunicateOptimizeStrategy(Strategy):
   """
-  Base strategy class for algorithms that separate local optimization 
-  and communication into distinct phases.
+  Base class for strategies that interleave communication and optimization.
   
   This strategy:
   1. Performs local optimization step
@@ -45,15 +45,12 @@ class CommunicateOptimizeStrategy(Strategy):
   
   def __init__(self, 
                communication_modules: List[CommunicationModule],
-               inner_optim: Optional[OptimSpec] = None,
+               inner_optim: Optional[Union[str, OptimSpec]] = None,
                max_norm: Optional[float] = None,
                **kwargs):
     super().__init__(**kwargs)
     
-    if inner_optim is None:
-      self.inner_optim_spec = OptimSpec(torch.optim.AdamW)
-    else:
-      self.inner_optim_spec = inner_optim
+    self.inner_optim_spec = ensure_optim_spec(inner_optim) or OptimSpec(torch.optim.AdamW)
 
     self.communication_modules = communication_modules
     self.max_norm = max_norm

@@ -4,10 +4,10 @@ import torch.distributed as dist
 from torch import nn
 import copy
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
 
 from .communicate_optimize_strategy import CommunicateOptimizeStrategy, CommunicationModule
-from .optim import OptimSpec
+from .optim import OptimSpec, ensure_optim_spec
 from .communicate import *
 
 class SparseCommunicator(CommunicationModule):
@@ -45,7 +45,7 @@ class SparseCommunicator(CommunicationModule):
 
 class SPARTAStrategy(CommunicateOptimizeStrategy):
     def __init__(self, 
-                 inner_optim: Optional[OptimSpec] = None,
+                 inner_optim: Optional[Union[str, OptimSpec]] = None,
                  p_sparta=0.005,
                  **kwargs):
 

@@ -12,6 +12,8 @@ from exogym.utils import *
 
 from abc import ABC, abstractmethod
 
+from .optim import OptimSpec, ensure_optim_spec
+ 
 class Strategy(ABC, LogModule):
     def __init__(self,
                  lr_scheduler: str = None,
@@ -108,13 +110,8 @@ class SimpleReduceStrategy(Strategy):
                  max_norm=None,
                  **kwargs):
         super().__init__(**kwargs)
-        
-        if optim_spec is not None:
-            self.optim_spec = optim_spec
-        else:
-            # Import OptimSpec here to avoid circular imports
-            from .optim import OptimSpec
-            self.optim_spec = OptimSpec(torch.optim.AdamW)
+       
+        self.optim_spec = ensure_optim_spec(optim_spec) or OptimSpec(torch.optim.AdamW)
             
         self.max_norm = max_norm
 

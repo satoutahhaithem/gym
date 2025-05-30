@@ -1,8 +1,8 @@
 import torch
-from typing import Optional
+from typing import Optional, Union
 
 from .communicate_optimize_strategy import CommunicateOptimizeStrategy
-from .optim import OptimSpec
+from .optim import OptimSpec, ensure_optim_spec
 from .sparta import SparseCommunicator, RandomIndexSelector
 from .diloco import DiLoCoCommunicator
 
@@ -17,8 +17,8 @@ class SPARTADiLoCoStrategy(CommunicateOptimizeStrategy):
   """
   
   def __init__(self, 
-               inner_optim: Optional[OptimSpec] = None,
-               outer_optim: Optional[OptimSpec] = None,
+               inner_optim: Optional[Union[str, OptimSpec]] = None,
+               outer_optim: Optional[Union[str, OptimSpec]] = None,
                p_sparta: float = 0.005,
                H: int = 100,
                **kwargs):

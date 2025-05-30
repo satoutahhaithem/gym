@@ -4,10 +4,10 @@ from copy import deepcopy
 from torch.nn import utils as nn_utils
 import torch
 
-from typing import Optional
+from typing import Optional, Union
 
 from .communicate_optimize_strategy import CommunicateOptimizeStrategy, CommunicationModule
-from .optim import OptimSpec
+from .optim import OptimSpec, ensure_optim_spec
 from .communicate import *
 
 class DiLoCoCommunicator(CommunicationModule):
@@ -17,18 +17,15 @@ class DiLoCoCommunicator(CommunicationModule):
   
   def __init__(self, 
                H: int=100, 
-               outer_optim: Optional[OptimSpec] = None, 
+               outer_optim: Optional[Union[str, OptimSpec]] = None, 
                **kwargs):
     super().__init__(**kwargs)
 
-    if outer_optim is not None:
-      self.outer_optim_spec = outer_optim
-    else:
-      self.outer_optim_spec = OptimSpec(
-        torch.optim.SGD,
-        lr=0.7,
-        nesterov=True,
-        momentum=0.9)
+    self.outer_optim_spec = ensure_optim_spec(outer_optim) or OptimSpec(
+      torch.optim.SGD,
+      lr=0.7,
+      nesterov=True,
+      momentum=0.9)
 
     self.H = H
 
@@ -90,23 +87,20 @@ class DiLoCoCommunicator(CommunicationModule):
 
 class DiLoCoStrategy(CommunicateOptimizeStrategy):
   def __init__(self, 
-               inner_optim: Optional[OptimSpec] = None,
-               outer_optim: Optional[OptimSpec] = None,
+               inner_optim: Optional[Union[str, OptimSpec]] = None,
+               outer_optim: Optional[Union[str, OptimSpec]] = None,
                H: int = 100,
                **kwargs):
     self.H = H
 
-    if inner_optim is None:
-      self.inner_optim_spec = OptimSpec(torch.optim.AdamW)
-    else:
-      self.inner_optim_spec = inner_optim
+    self.inner_optim_spec = ensure_optim_spec(inner_optim) or OptimSpec(torch.optim.AdamW)
 
     # Create the master-worker communicator
     communicator = DiLoCoCommunicator(H=H, outer_optim=outer_optim)
     
     super().__init__(
       communication_modules=[communicator],
-      inner_optim=inner_optim,
+      inner_optim=self.inner_optim_spec,
       **kwargs
     )
     

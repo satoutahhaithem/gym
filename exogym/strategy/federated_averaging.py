@@ -5,10 +5,10 @@ import random
 import torch
 from torch.nn import utils as nn_utils
 
-from typing import Optional, Set
+from typing import Optional, Set, Union
 
 from .communicate_optimize_strategy import CommunicateOptimizeStrategy, CommunicationModule
-from .optim import OptimSpec
+from .optim import OptimSpec, ensure_optim_spec
 from .communicate import *
 
 class AveragingCommunicator(CommunicationModule):
@@ -81,7 +81,7 @@ class AveragingCommunicator(CommunicationModule):
 
 class FedAvgStrategy(CommunicateOptimizeStrategy):
     def __init__(self, 
-                 inner_optim: Optional[OptimSpec] = None,
+                 inner_optim: Optional[Union[str, OptimSpec]] = None,
                  island_size: Optional[int] = None,
                  H: int = 1,
                  max_norm: float = None,

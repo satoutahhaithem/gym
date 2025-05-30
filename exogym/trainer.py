@@ -251,7 +251,7 @@ class LocalTrainer(Trainer):
     All ranks are assumed to be on the same machine, and device is defaulted to cpu.
     '''
     os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = str(12356 + (10 if self.device == 'cpu' else 0))
+    os.environ['MASTER_PORT'] = str(12355 + (10 if self.device == 'cpu' else 0))
 
     if self.device == '' or self.device == None:
       if torch.cuda.is_available():
