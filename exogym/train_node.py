@@ -502,6 +502,8 @@ class TrainNode(LogModule):
         # if self.config.checkpoint_interval is not None:
         #     self._save_checkpoint()
 
+        # Return the final model state dict
+        return self.model.state_dict()
 
     def __config__(self):
         remove_keys = ['model', 'train_dataloader', 'val_dataloader', 'strategy']

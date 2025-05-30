@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 import copy
 from dataclasses import dataclass
 from typing import Tuple, Optional, List, Any, Dict
+from collections import OrderedDict
 
 # def print_dataset_size(dataset: torch.utils.data.Dataset):
 #   from pympler import asizeof
@@ -51,7 +52,7 @@ class TrainingConfig:
       self.kwargs = {}
 
 
-def _worker(rank: int, config: TrainingConfig):
+def _worker(rank: int, config: TrainingConfig, result_queue: mp.Queue):
   """
   Entry point executed in every child process.
   This function is importable as exogym.trainer._worker, making it notebook-safe.
@@ -79,14 +80,21 @@ def _worker(rank: int, config: TrainingConfig):
   trainer.checkpoint_interval = config.checkpoint_interval
   trainer.kwargs = config.kwargs
   
-  # Run the training process
-  trainer._fit_process(rank)
+  # Run the training process and get the final model state dict
+  final_model_state = trainer._fit_process(rank)
+  
+  # Move tensors to CPU and detach to avoid CUDA serialization issues
+  cpu_state_dict = OrderedDict()
+  for key, tensor in final_model_state.items():
+    cpu_state_dict[key] = tensor.detach().cpu()
+  
+  # Put the result in the queue
+  result_queue.put((rank, cpu_state_dict))
 
 
 def launch(config: TrainingConfig, num_nodes: int = None):
   """
-  Spawn `num_nodes` processes using safe 'spawn' method.
-  This is the only place where torch.multiprocessing.spawn is called.
+  Spawn `num_nodes` processes using mp.spawn and collect their final models.
   """
   if num_nodes is not None:
     config.num_nodes = num_nodes
@@ -100,13 +108,48 @@ def launch(config: TrainingConfig, num_nodes: int = None):
   torch.backends.cuda.matmul.allow_tf32 = True
   torch.backends.cudnn.allow_tf32 = True
 
+  # Create a manager and queue for collecting results
+  manager = mp.Manager()
+  result_queue = manager.Queue()
+  
+  # Use mp.spawn with the result queue
   mp.spawn(
     _worker,
-    args=(config,),
+    args=(config, result_queue),
     nprocs=config.num_nodes,
     start_method="spawn",
     join=True,
   )
+  
+  # Collect results
+  model_states = {}
+  for _ in range(config.num_nodes):
+    rank, state_dict = result_queue.get()
+    model_states[rank] = state_dict
+  
+  # Average the models
+  if model_states:
+    return _average_model_states(model_states)
+  return None
+
+
+def _average_model_states(model_states: Dict[int, OrderedDict]) -> OrderedDict:
+  """Average model state dictionaries from multiple processes."""
+  if not model_states:
+    return None
+  
+  # Get the first state dict as template
+  averaged_state = OrderedDict()
+  first_state = list(model_states.values())[0]
+  
+  # Average each parameter
+  for param_name in first_state.keys():
+    # Stack all versions of this parameter
+    param_stack = torch.stack([state[param_name] for state in model_states.values()])
+    # Average them
+    averaged_state[param_name] = torch.mean(param_stack, dim=0)
+  
+  return averaged_state
 
 
 class Trainer:
@@ -141,6 +184,7 @@ class Trainer:
     """
     Train the model. For single process training (num_nodes=1), runs directly.
     For multi-process training, delegates to launch_ddp for notebook safety.
+    Returns the final trained model (averaged across nodes for multi-node training).
     """
     # Store parameters
     self.num_epochs = num_epochs
@@ -169,7 +213,12 @@ class Trainer:
       torch.backends.cuda.matmul.allow_tf32 = True
       torch.backends.cudnn.allow_tf32 = True
       
-      self._fit_process(rank=0)
+      final_state_dict = self._fit_process(rank=0)
+      
+      # Create a copy of the original model and load the final state
+      final_model = copy.deepcopy(self.model)
+      final_model.load_state_dict(final_state_dict)
+      return final_model
     else:
       # Multi-process mode - use safe launcher
       config = TrainingConfig(
@@ -192,12 +241,21 @@ class Trainer:
         trainer_class=self.__class__,
         kwargs=kwargs
       )
-      launch(config)
+      averaged_state_dict = launch(config)
+      
+      if averaged_state_dict is not None:
+        # Create a copy of the original model and load the averaged state
+        final_model = copy.deepcopy(self.model)
+        final_model.load_state_dict(averaged_state_dict)
+        return final_model
+      else:
+        return None
 
   def _fit_process(self, rank):
     """
     The core training logic that runs in each process.
     Renamed from _fit and removed the spawn call.
+    Returns the final model state dict.
     """
     self.rank = rank
 
@@ -232,9 +290,11 @@ class Trainer:
       **self.kwargs
     )
 
-    sim.train()
+    final_state_dict = sim.train()
 
     self._process_cleanup()
+    
+    return final_state_dict
 
   @abstractmethod
   def _build_connection(self):
