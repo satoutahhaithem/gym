@@ -31,7 +31,7 @@ pip install exogym
 Optional feature flags allowed are:
 
 ```bash
-wandb,s3,demo,examples,all,dev
+wandb,gpt,demo,examples,all,dev
 ```
 
 For example, `pip install exogym[demo]`

@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import os
+import json
 
 class NonContiguousGPTTrainDataset(torch.utils.data.Dataset):
     """Dataset for pre-segmented training data (2D tensor).
@@ -33,32 +34,96 @@ class LazyNonContiguousGPTTrainDataset(torch.utils.data.Dataset):
         self.device = device
         self.max_chunks_in_memory = max_chunks_in_memory
         
+        # Try to read metadata for more efficient initialization
+        metadata_file = os.path.join(cache_location, "cache_metadata.json")
+        metadata = None
+        if os.path.exists(metadata_file):
+            try:
+                with open(metadata_file, 'r') as f:
+                    metadata = json.load(f)
+                print(f"Using metadata from {metadata_file}")
+            except (json.JSONDecodeError, IOError) as e:
+                print(f"Warning: Could not read metadata file {metadata_file}: {e}")
+                metadata = None
+        
         # Build index mapping from global index to (chunk_id, local_idx)
         self.chunk_sizes = []
         self.chunk_offsets = []
         total_examples = 0
         
-        for chunk_id in chunk_ids:
-            cache_file = f'{cache_location}/chunk_{chunk_id}.npy'
-            if not os.path.exists(cache_file):
-                raise FileNotFoundError(f"Cached chunk file not found: {cache_file}")
+        # If we have metadata and all chunks are consecutive integers, use it for efficiency
+        if (metadata and 
+            chunk_ids == list(range(len(chunk_ids))) and 
+            len(chunk_ids) <= metadata.get('num_chunks', 0)):
             
-            # Load just to get shape, then discard
-            chunk_data = np.load(cache_file)
-            assert chunk_data.ndim == 2, f"Expected 2D chunk data, got {chunk_data.ndim}D"
+            print("Using metadata for efficient initialization")
+            blocks_per_chunk = metadata.get('blocks_per_chunk', None)
+            total_blocks = metadata.get('total_blocks', None)
             
-            chunk_size = chunk_data.shape[0]
-            self.chunk_sizes.append(chunk_size)
-            self.chunk_offsets.append(total_examples)
-            total_examples += chunk_size
-            
-            # Store block_size from first chunk
-            if len(self.chunk_sizes) == 1:
-                self.block_size = chunk_data.shape[1]
+            if blocks_per_chunk and total_blocks:
+                # Use metadata to calculate chunk sizes without loading
+                for i, chunk_id in enumerate(chunk_ids):
+                    # Verify chunk file exists
+                    cache_file = f'{cache_location}/chunk_{chunk_id}.npy'
+                    if not os.path.exists(cache_file):
+                        raise FileNotFoundError(f"Cached chunk file not found: {cache_file}")
+                    
+                    # Calculate expected chunk size from metadata
+                    if i == len(chunk_ids) - 1 and i == metadata.get('num_chunks', 0) - 1:
+                        # Last chunk of the full dataset - may have different size
+                        chunk_size = total_blocks - (i * blocks_per_chunk)
+                    else:
+                        chunk_size = blocks_per_chunk
+                    
+                    self.chunk_sizes.append(chunk_size)
+                    self.chunk_offsets.append(total_examples)
+                    total_examples += chunk_size
+                
+                # Get block size from metadata or first chunk
+                self.block_size = 1024  # Default from metadata, will verify below
+                
+                # Verify with first chunk to ensure consistency
+                first_chunk_file = f'{cache_location}/chunk_{chunk_ids[0]}.npy'
+                first_chunk_data = np.load(first_chunk_file)
+                if first_chunk_data.ndim != 2:
+                    raise ValueError(f"Expected 2D chunk data, got {first_chunk_data.ndim}D")
+                self.block_size = first_chunk_data.shape[1]
+                
+                print(f"Initialized using metadata: {len(chunk_ids)} chunks, {total_examples} examples, block_size={self.block_size}")
+            else:
+                print("Metadata incomplete, falling back to chunk loading")
+                metadata = None
+        else:
+            if metadata:
+                print("Chunk IDs don't match metadata pattern, falling back to chunk loading")
+            metadata = None
+        
+        # Fallback: load each chunk to get shape info (original behavior)
+        if metadata is None:
+            print("Loading chunks to determine sizes")
+            for chunk_id in chunk_ids:
+                cache_file = f'{cache_location}/chunk_{chunk_id}.npy'
+                if not os.path.exists(cache_file):
+                    raise FileNotFoundError(f"Cached chunk file not found: {cache_file}")
+                
+                # Load just to get shape, then discard
+                chunk_data = np.load(cache_file)
+                assert chunk_data.ndim == 2, f"Expected 2D chunk data, got {chunk_data.ndim}D"
+                
+                chunk_size = chunk_data.shape[0]
+                self.chunk_sizes.append(chunk_size)
+                self.chunk_offsets.append(total_examples)
+                total_examples += chunk_size
+                
+                # Store block_size from first chunk
+                if len(self.chunk_sizes) == 1:
+                    self.block_size = chunk_data.shape[1]
         
         self.total_examples = total_examples
         self._loaded_chunks = {}  # Cache for loaded chunks
         self._chunk_access_order = []  # Track access order for LRU eviction
+        
+        print(f"Dataset initialized: {len(chunk_ids)} chunks, {self.total_examples} total examples")
 
     def __len__(self):
         return self.total_examples
@@ -114,6 +179,51 @@ class LazyNonContiguousGPTTrainDataset(torch.utils.data.Dataset):
             'total_chunks': len(self.chunk_ids),
             'loaded_chunk_ids': list(self._loaded_chunks.keys())
         }
+
+    @classmethod
+    def from_cache(cls, cache_location, device, max_chunks_in_memory=None, chunk_range=None):
+        """
+        Create a LazyNonContiguousGPTTrainDataset from cached data using metadata.
+        
+        Args:
+            cache_location: Directory containing cached chunks and metadata
+            device: Device to load tensors on
+            max_chunks_in_memory: Maximum chunks to keep in memory
+            chunk_range: Tuple (start_chunk, end_chunk) to use subset of chunks, or None for all
+            
+        Returns:
+            LazyNonContiguousGPTTrainDataset instance
+        """
+        metadata_file = os.path.join(cache_location, "cache_metadata.json")
+        if not os.path.exists(metadata_file):
+            raise FileNotFoundError(f"Metadata file not found: {metadata_file}")
+        
+        with open(metadata_file, 'r') as f:
+            metadata = json.load(f)
+        
+        num_chunks = metadata.get('num_chunks', 0)
+        if num_chunks == 0:
+            raise ValueError("No chunks found in metadata")
+        
+        if chunk_range is None:
+            chunk_ids = list(range(num_chunks))
+        else:
+            start_chunk, end_chunk = chunk_range
+            start_chunk = max(0, start_chunk)
+            end_chunk = min(num_chunks, end_chunk)
+            chunk_ids = list(range(start_chunk, end_chunk))
+        
+        print(f"Creating dataset from cache with {len(chunk_ids)} chunks (range: {chunk_ids[0] if chunk_ids else 'N/A'}-{chunk_ids[-1] if chunk_ids else 'N/A'})")
+        
+        return cls(chunk_ids, cache_location, device, max_chunks_in_memory)
+
+    def get_cache_metadata(self):
+        """Return metadata about the cached dataset"""
+        metadata_file = os.path.join(self.cache_location, "cache_metadata.json")
+        if os.path.exists(metadata_file):
+            with open(metadata_file, 'r') as f:
+                return json.load(f)
+        return None
 
 class ContiguousGPTTrainDataset(torch.utils.data.Dataset):
     """Dataset for continuous token streams (1D tensor).

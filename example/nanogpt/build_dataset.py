@@ -2,6 +2,7 @@ import torch
 import argparse
 import numpy as np
 import os
+import json
 from datasets import load_dataset, load_dataset_builder, concatenate_datasets
 
 def generate_char_vocab():
@@ -144,8 +145,7 @@ def build_dataset_small(dataset, block_size=1024, start_pc=0.0, end_pc=1.0):
 
   return data, vocab_size
 
-### TODO!
-def build_dataset_owt(dataset, block_size=1024, start_pc=0.0, end_pc=1.0):
+def build_dataset_owt(start_pc=0.0, end_pc=1.0, max_workers=8):
     """
     Loads and preprocesses the dataset with caching, using either a custom character-level tokenizer
     or the GPT2 tokenizer. It uses only a fraction of the full dataset, as controlled by dataset_proportion,
@@ -153,58 +153,78 @@ def build_dataset_owt(dataset, block_size=1024, start_pc=0.0, end_pc=1.0):
     When rank and world_size are provided, the training portion is sharded among nodes.
 
     Args:
-        dataset: a string identifier ("shakespeare" or "wikitext")
-        block_size: the sequence block size.
-        char (bool): If True, use character-level tokenization; otherwise, use GPT-2 tokenization.
         start_pc (float): The start percentage of the dataset to use.
         end_pc (float): The end percentage of the dataset to use.
+        max_workers (int): Maximum number of workers for parallel processing.
     """
-    if dataset == 'shakespeare':
-        char = True
-    else:
-        char = False
-
-    # Decide cache locations based on tokenization mode and rank.
-    if char:
-        cache_dir = os.path.join("data", f"{dataset}_char")
-    else:
-        cache_dir = os.path.join("data", dataset)
+    block_size = 1024  # Fixed block size for OWT
+    cache_dir = os.path.join("data", "owt")
     os.makedirs(cache_dir, exist_ok=True)
 
-    data_cache_file = os.path.join(cache_dir, f"data_block{block_size}_{start_pc}_{end_pc}.pt")
-
-    if os.path.exists(data_cache_file):
-        print(f"Loading cached dataset from {data_cache_file}")
-        np.load(data_cache_file)
-
-    print(f"Loading dataset: {dataset} {'(char-level)' if char else '(GPT2 tokenization)'} start%: {start_pc} end%: {end_pc}")
+    # Check if the dataset is already cached for the desired percentage range
+    metadata_file = os.path.join(cache_dir, "cache_metadata.json")
     
-    # Determine the dataset identifier and mapping function.
-    if dataset == "shakespeare":
-        dataset_id = "Trelis/tiny-shakespeare"
-        mapping_fn = lambda x: {'text': x['Text']}
-        load_config = {}
-    elif dataset == "wikitext":
-        dataset_id = "wikitext"
-        config = "wikitext-2-raw-v1"
-        mapping_fn = lambda x: {'text': x['text']}
-        load_config = {"name": config}
-    elif dataset == "owt":
-        dataset_id = "Skylion007/openwebtext"
-        mapping_fn = lambda x: x  # Assume openwebtext already has a 'text' field.
-        load_config = {"trust_remote_code": True}
+    if os.path.exists(metadata_file):
+        with open(metadata_file, 'r') as f:
+            metadata = json.load(f)
+        
+        cached_start = metadata.get('start_pc', None)
+        cached_end = metadata.get('end_pc', None)
+        cached_chunks = metadata.get('num_chunks', 0)
+        vocab_size = metadata.get('vocab_size', 50257)
+        
+        # Check if requested range is within cached range
+        if (cached_start is not None and cached_end is not None and 
+            start_pc >= cached_start and end_pc <= cached_end):
+            
+            print(f"Using cached dataset from {start_pc} to {end_pc} (cached range: {cached_start} to {cached_end})")
+            
+            # Calculate which chunks to use from the cached data
+            cached_range = cached_end - cached_start
+            requested_range = end_pc - start_pc
+            
+            if cached_range > 0:
+                # Calculate start and end chunk indices
+                start_chunk_idx = int((start_pc - cached_start) / cached_range * cached_chunks)
+                end_chunk_idx = int((end_pc - cached_start) / cached_range * cached_chunks)
+                
+                # Ensure we don't go out of bounds
+                start_chunk_idx = max(0, start_chunk_idx)
+                end_chunk_idx = min(cached_chunks, end_chunk_idx)
+                
+                chunk_ids = list(range(start_chunk_idx, end_chunk_idx))
+                
+                # Verify chunks exist
+                missing_chunks = []
+                for chunk_id in chunk_ids:
+                    cache_file = f'{cache_dir}/chunk_{chunk_id}.npy'
+                    if not os.path.exists(cache_file):
+                        missing_chunks.append(chunk_id)
+                
+                if not missing_chunks:
+                    print(f"Using cached chunks {start_chunk_idx} to {end_chunk_idx-1}")
+                    return chunk_ids, cache_dir, vocab_size
+                else:
+                    print(f"Missing chunks {missing_chunks}, will re-download")
+            else:
+                print("Invalid cached range, will re-download")
+        else:
+            print(f"Requested range ({start_pc} to {end_pc}) extends beyond cached range ({cached_start} to {cached_end}), will re-download")
     else:
-        raise ValueError(f"Unknown dataset: {dataset}")
+        print("No cache metadata found, will download fresh")
+
+    print(f"Loading dataset: owt {'(GPT2 tokenization)'} start%: {start_pc} end%: {end_pc}")
+    
+    dataset_id = "Skylion007/openwebtext"
+    mapping_fn = lambda x: x  # Assume openwebtext already has a 'text' field.
+    load_config = {"trust_remote_code": True}
 
     # Use the dataset builder to obtain the total number of records.
     builder = load_dataset_builder(dataset_id, **load_config)
-    if dataset == "wikitext" or dataset == "shakespeare":
-        total_records = builder.info.splits["train"].num_examples + builder.info.splits["test"].num_examples
-    else:
-        total_records = builder.info.splits["train"].num_examples
+    total_records = builder.info.splits["train"].num_examples
 
     print(f"Total records to import: {total_records}")
-    
+
     # Calculate the number of records to use and how to split them.
     start_record = int(total_records * start_pc)
     end_record = int(total_records * end_pc)
@@ -212,39 +232,20 @@ def build_dataset_owt(dataset, block_size=1024, start_pc=0.0, end_pc=1.0):
     used_records = end_record - start_record
     print(f"Using {used_records} records: {start_record} to {end_record}")
 
-    if dataset == 'wikitext' or dataset == 'shakespeare':
-        # Small enough dataset that we can load the whole thing in.
-        dataset = load_dataset(dataset_id, **load_config)
-        dataset = concatenate_datasets([dataset['train'], dataset['test']])
+    dataset = load_dataset(dataset_id, split=f"train[{start_record}:{end_record}]", **load_config)
 
-        dataset = dataset.map(mapping_fn, remove_columns=dataset.column_names)
-
-        dataset = dataset.select(range(start_record, end_record))
-    else:
-        # Large dataset - we need to slice instead of loading the whole thing.
-        dataset = load_dataset(dataset_id, split=f"train[{start_record}:{end_record}]", **load_config)
-
-    ## Initialize the tokenizer.
-    if char:
-        char_int, eos_token_id = generate_char_vocab()
-        vocab_size = len(char_int)
-        def tokenize(example):
-            text = example['text']
-            if isinstance(text, str):
-                return {'tokenized': [char_int[c] for c in text]}
-            elif isinstance(text, list):
-                return {'tokenized': [[char_int[c] for c in t] for t in text]}
-            else:
-                raise Exception("Unknown type")
-    else:
+    try:
         from transformers import GPT2Tokenizer
-        tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-        vocab_size = tokenizer.vocab_size
-        eos_token_id = tokenizer.eos_token_id
-        def tokenize(example):
-            return {'tokenized': tokenizer(example['text'], truncation=True, max_length=block_size)['input_ids']}
+    except ImportError:
+        raise ImportError("transformers is not installed. Please install the correct distro using pip install exogym[gpt]")
+
+    tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    vocab_size = tokenizer.vocab_size
+    eos_token_id = tokenizer.eos_token_id
+    def tokenize(example):
+        return {'tokenized': tokenizer(example['text'], truncation=True, max_length=block_size)['input_ids']}
 
     ## Tokenize the dataset.
     dataset = dataset.map(
@@ -253,22 +254,16 @@ def build_dataset_owt(dataset, block_size=1024, start_pc=0.0, end_pc=1.0):
         batched=True
     )
 
-    if dataset != 'owt':
-        # Convert tokenized lists to 1-d contiguous stream.
-        def aggregate_examples(examples):
-            all_ids = np.concatenate([np.array(ids + [eos_token_id]) for ids in examples["tokenized"] if ids])
-            return {'ids': all_ids}
-    else:
-        # Convert tokenized lists to blocks with fixed block size
-        def aggregate_examples(examples):
-            # Flatten all ids and add EOS tokens
-            all_ids = np.concatenate([np.array(ids + [eos_token_id]) for ids in examples["tokenized"] if ids])
-            num_blocks = len(all_ids) // block_size
-            if num_blocks == 0:
-                return {"ids": torch.tensor([])}
-            all_ids = all_ids[: num_blocks * block_size]
-            data_2d = all_ids.reshape(-1, block_size)
-            return {"ids": data_2d}
+    # Convert tokenized lists to blocks with fixed block size
+    def aggregate_examples(examples):
+        # Flatten all ids and add EOS tokens
+        all_ids = np.concatenate([np.array(ids + [eos_token_id]) for ids in examples["tokenized"] if ids])
+        num_blocks = len(all_ids) // block_size
+        if num_blocks == 0:
+            return {"ids": torch.tensor([])}
+        all_ids = all_ids[: num_blocks * block_size]
+        data_2d = all_ids.reshape(-1, block_size)
+        return {"ids": data_2d}
 
     dataset_processed = dataset.map(
         aggregate_examples,
@@ -277,15 +272,80 @@ def build_dataset_owt(dataset, block_size=1024, start_pc=0.0, end_pc=1.0):
         num_proc=os.cpu_count()
     )
 
-    dataset_processed.set_format(type='numpy', columns=['ids'])
+    # Get all the processed blocks
+    all_blocks = []
+    for item in dataset_processed:
+        if len(item['ids']) > 0:
+            all_blocks.append(item['ids'])
+    
+    if not all_blocks:
+        raise ValueError("No valid blocks found in dataset")
+    
+    # Concatenate all blocks into a single 2D array
+    all_data = np.vstack(all_blocks)
+    total_blocks = all_data.shape[0]
+    
+    print(f"Total blocks: {total_blocks}")
+    
+    # Calculate number of chunks (aim for ~1000 chunks for 0.0-1.0 range)
+    # Scale based on the actual percentage range being processed
+    range_pc = end_pc - start_pc
+    target_chunks_for_full_dataset = 1000
+    num_chunks = max(1, int(target_chunks_for_full_dataset * range_pc))
+    
+    # Calculate blocks per chunk
+    blocks_per_chunk = max(1, total_blocks // num_chunks)
+    
+    print(f"Creating {num_chunks} chunks with ~{blocks_per_chunk} blocks each")
+    
+    # Clear existing cache files to avoid conflicts
+    for existing_file in os.listdir(cache_dir):
+        if existing_file.startswith('chunk_') and existing_file.endswith('.npy'):
+            os.remove(os.path.join(cache_dir, existing_file))
+    
+    # Create chunks and save them with simple numeric IDs
+    chunk_ids = []
+    cache_location = cache_dir
+    
+    for chunk_idx in range(num_chunks):
+        start_block = chunk_idx * blocks_per_chunk
+        if chunk_idx == num_chunks - 1:
+            # Last chunk gets all remaining blocks
+            end_block = total_blocks
+        else:
+            end_block = (chunk_idx + 1) * blocks_per_chunk
+        
+        if start_block >= total_blocks:
+            break
+            
+        chunk_data = all_data[start_block:end_block]
+        
+        # Use simple numeric chunk ID
+        chunk_id = chunk_idx
+        chunk_ids.append(chunk_id)
+        
+        # Save chunk
+        cache_file = f'{cache_location}/chunk_{chunk_id}.npy'
+        np.save(cache_file, chunk_data)
+        
+        print(f"Saved chunk {chunk_id} with {chunk_data.shape[0]} blocks to {cache_file}")
 
-    data = dataset_processed["ids"]
+    # Save metadata about this cache
+    metadata = {
+        'start_pc': start_pc,
+        'end_pc': end_pc,
+        'num_chunks': len(chunk_ids),
+        'vocab_size': vocab_size,
+        'total_blocks': total_blocks,
+        'blocks_per_chunk': blocks_per_chunk
+    }
+    
+    with open(metadata_file, 'w') as f:
+        json.dump(metadata, f, indent=2)
+    
+    print(f"Saved cache metadata: {metadata}")
 
-    print(f"Dataset size: {data.shape}")
-
-    np.save(data_cache_file, data)
-
-    return data, vocab_size
+    return chunk_ids, cache_location, vocab_size
 
 
 def main():
@@ -301,11 +361,8 @@ def main():
                         help="Fraction of the used dataset to reserve for validation")
     args = parser.parse_args()
 
-    data, vocab_size = build_dataset(args.dataset, 
-                                                       args.block_size, 
-                                                       char=args.char,
-                                                       start_pc=args.start_pc,
-                                                       end_pc=args.end_pc)
+    chunk_ids, cache_location, vocab_size = build_dataset_owt(args.start_pc, 
+                                                       args.end_pc)
     
     print(f"Finished importing dataset: {args.dataset} {'(char-level)' if args.char else '(GPT2 tokenization)'} start%: {args.start_pc} end%: {args.end_pc}")
 
