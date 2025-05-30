@@ -1,6 +1,5 @@
 from exogym.trainer import LocalTrainer
-from exogym.example.nanogpt.nanogpt import GPT, GPTConfig
-from exogym.example.nanogpt.dataset import get_dataset
+from nanogpt import GPT, GPTConfig, get_dataset
 from exogym.strategy.optim import OptimSpec
 
 import argparse
