@@ -221,8 +221,10 @@ class GPT(nn.Module):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
     def forward(self, batch, inference=False):
-        # print(batch)
-        idx, y = batch
+        if inference:
+            idx = batch
+        else:
+            idx, y = batch
 
         device = idx.device
         b, t = idx.size()
@@ -244,10 +246,13 @@ class GPT(nn.Module):
             # if we are given some desired targets also calculate the loss
         logits = self.lm_head(x)
 
-        logits = logits.transpose(-1, -2)
-        loss = self.criterion(logits, y)
-        return loss
-        # return logits, loss
+        if inference:
+            return logits
+        else:
+            logits = logits.transpose(-1, -2)
+            loss = self.criterion(logits, y)
+
+            return loss
 
     def crop_block_size(self, block_size):
         # model surgery to decrease the block size if necessary
