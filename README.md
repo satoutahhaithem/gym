@@ -17,28 +17,6 @@ Instead of training with multiple ranks, we simulate the distributed training pr
 - [SPARTA](https://openreview.net/forum?id=stFPf3gzq1)
 - [DeMo](https://arxiv.org/abs/2411.19870)
 
-## Example Usage
-
-```python
-from exogym import LocalTrainer
-from exogym.strategy import DiLoCoStrategy
-
-train_dataset, val_dataset = ...
-model = ...
-
-trainer = LocalTrainer(model, train_dataset, val_dataset)
-
-strategy = DiLoCoStrategy(
-  inner_optim='adam',
-  H=100
-)
-
-trainer.fit(
-  strategy=strategy,
-  num_nodes=4,
-  device='mps'
-)
-```
 
 ## Installation
 
@@ -50,43 +28,61 @@ pip install exogym
 
 ### Installation with Optional Features
 
-For experiment tracking with Weights & Biases:
+Optional feature flags allowed are:
+
 ```bash
-pip install exogym[wandb]
+wandb,s3,demo,examples,all,dev
 ```
 
-For S3 dataset loading:
-```bash
-pip install exogym[s3]
-```
-
-For DeMo strategy support:
-```bash
-pip install exogym[demo]
-```
-
-For running examples:
-```bash
-pip install exogym[examples]
-```
-
-For all optional features:
-```bash
-pip install exogym[all]
-```
-
-For development:
-```bash
-pip install exogym[dev]
-```
+For example, `pip install exogym[demo]`
 
 ### Development Installation
 
 To install for development:
 ```bash
-git clone https://github.com/MattyAB/DistributedSim.git
-cd DistributedSim
-pip install -e .[dev]
+git clone https://github.com/exo-explore/gym.git exogym
+cd exogym
+pip install -e ".[dev]"
+```
+
+## Usage
+
+### Example Scripts
+
+MNIST comparison of DDP, DiLoCo, and SPARTA:
+
+```bash
+python run/mnist.py
+```
+
+NanoGPT Shakespeare DiLoCo:
+
+```bash
+python run/nanogpt_diloco.py --dataset shakespeare
+```
+
+### Custom Training
+
+```python
+from exogym import LocalTrainer
+from exogym.strategy import DiLoCoStrategy
+
+train_dataset, val_dataset = ...
+model = ... # model.forward() expects a batch, and returns a scalar loss
+
+trainer = LocalTrainer(model, train_dataset, val_dataset)
+
+# Strategy for optimization & communication
+strategy = DiLoCoStrategy(
+  inner_optim='adam',
+  H=100
+)
+
+trainer.fit(
+  strategy=strategy,
+  num_nodes=4,
+  device='mps'
+)
 ```
 
 ## Codebase Structure
