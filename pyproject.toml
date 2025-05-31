@@ -7,7 +7,7 @@ name = "exogym"
 version = "0.1.0a1"
 description = "EXO Gym: Open source framework for simulated distributed training methods"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "Matt Beton", email = "matthew.beton@gmail.com"}
 ]
