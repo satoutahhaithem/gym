@@ -204,21 +204,46 @@ def main():
   parser = arg_parse()
   args = parser.parse_args()
 
-  # Get datasets
-  train_dataset, vocab_size = get_dataset(
-    args.dataset, 
-    block_size=args.block_size, 
-    device='cpu', 
-    start_pc=args.start_pc, 
-    end_pc=args.end_pc
-  )
-  val_dataset, vocab_size = get_dataset(
-    args.dataset, 
-    block_size=args.block_size, 
-    device='cpu', 
-    start_pc=args.val_start_pc, 
-    end_pc=args.val_end_pc
-  )
+  ## Example of dataset factory for OWT.
+  if args.dataset == 'owt' or False:
+    def dataset_factory(rank: int, num_nodes: int, train_dataset: bool) -> torch.utils.data.Dataset:
+      if train_dataset:
+        start_pc = rank / num_nodes * (args.end_pc - args.start_pc) + args.start_pc
+        end_pc = (rank + 1) / num_nodes * (args.end_pc - args.start_pc) + args.start_pc
+      else:
+        start_pc = args.val_start_pc
+        end_pc = args.val_end_pc
+
+      dataset, _ = get_dataset(
+        args.dataset, 
+        block_size=args.block_size, 
+        device='cpu', 
+        start_pc=start_pc, 
+        end_pc=end_pc
+      )
+      return dataset
+
+    train_dataset = dataset_factory
+    val_dataset = dataset_factory
+
+    vocab_size = 50257
+
+  else:
+    # Get datasets
+    train_dataset, vocab_size = get_dataset(
+      args.dataset, 
+      block_size=args.block_size, 
+      device='cpu', 
+      start_pc=args.start_pc, 
+      end_pc=args.end_pc
+    )
+    val_dataset, vocab_size = get_dataset(
+      args.dataset, 
+      block_size=args.block_size, 
+      device='cpu', 
+      start_pc=args.val_start_pc, 
+      end_pc=args.val_end_pc
+    )
 
   # Create model
   gpt_config = GPTConfig.gpt2_size_map(args.model_size)

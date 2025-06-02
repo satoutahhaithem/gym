@@ -23,7 +23,7 @@ Instead of training with multiple ranks, we simulate the distributed training pr
 ### Basic Installation
 Install with core dependencies only:
 ```bash
-pip install exogym
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ exogym
 ```
 
 ### Installation with Optional Features
@@ -93,7 +93,7 @@ trainer.fit(
 
 ## Technical Details
 
-EXO Gym uses pytorch multiprocessing to a subprocess per-node, which are able to communicate with each other using regular operations such as `all_reduce`.
+EXO Gym uses pytorch multiprocessing to spawn a subprocess per-node, which are able to communicate with each other using regular operations such as `all_reduce`.
 
 ### Model
 
@@ -101,7 +101,22 @@ The model is expected in a form that takes a `batch` (the same format as `datase
 
 ### Dataset
 
-Recall that when we call `trainer.fit()`, $K$ subprocesses are spawned to handle each of the virtual workers. The `dataset` object is passed to every subprocess, and a `DistributedSampler` will be used to select indices per-node. If the dataset is entirely loaded into memory, this memory will be duplicated per-node - be careful not to run out of memory! If the dataset is larger, it should be lazily loaded.
+Recall that when we call `trainer.fit()`, $K$ subprocesses are spawned to handle each of the virtual workers. There are two options for creating dataset:
+
+#### PyTorch `Dataset`
+
+Instantiate a single `Dataset`. The `dataset` object is passed to every subprocess, and a `DistributedSampler` will be used to select which datapoints are sampled per-node (to ensure each datapoint is only used once by each node). If the dataset is entirely loaded into memory, this memory will be duplicated per-node - be careful not to run out of memory! If the dataset is larger, it should be lazily loaded.
+
+#### `dataset_factory` function
+
+In place of the dataset object, pass a function with the following signature:
+
+```python
+def dataset_factory(rank: int, num_nodes: int, train_dataset: bool) -> torch.utils.data.Dataset
+```
+
+This will be called within each rank to build the dataset. Instead of each node storing the whole dataset and subsampling datapoints, each node only loads the necessary datapoints.
+
 
 <!-- For further information, see individual pages on:
 
