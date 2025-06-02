@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "exogym"
-version = "0.1.0a1"
+version = "0.1.0a2"
 description = "EXO Gym: Open source framework for simulated distributed training methods"
 readme = "README.md"
 license = "MIT"
@@ -36,7 +36,9 @@ dependencies = [
 [project.optional-dependencies]
 wandb = ["wandb>=0.12.0"]
 gpt = ["transformers>=4.29.0"]
-demo = ["einops>=0.6.0"]
+demo = [
+    "einops>=0.6.0"
+]
 examples = ["torchvision>=0.15.0"]
 dev = [
     "wandb>=0.12.0",
