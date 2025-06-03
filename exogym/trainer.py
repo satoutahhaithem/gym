@@ -62,6 +62,7 @@ def _worker(rank: int, config: TrainingConfig, result_queue: mp.Queue):
     model=config.model,
     train_dataset=config.train_dataset,
     val_dataset=config.val_dataset,
+    **config.kwargs
   )
   
   # Set all the configuration parameters
@@ -78,7 +79,6 @@ def _worker(rank: int, config: TrainingConfig, result_queue: mp.Queue):
   trainer.val_interval = config.val_interval
   trainer.autocast = config.autocast
   trainer.checkpoint_interval = config.checkpoint_interval
-  trainer.kwargs = config.kwargs
   
   # Run the training process and get the final model state dict
   final_model_state = trainer._fit_process(rank)
@@ -159,10 +159,12 @@ class Trainer:
   def __init__(self, 
               model: torch.nn.Module,
               train_dataset: Union[torch.utils.data.Dataset, Callable[[int, int, bool], torch.utils.data.Dataset]],
-              val_dataset: Union[torch.utils.data.Dataset, Callable[[int, int, bool], torch.utils.data.Dataset]]):
+              val_dataset: Union[torch.utils.data.Dataset, Callable[[int, int, bool], torch.utils.data.Dataset]],
+              **kwargs):
     self.model = model
     self.train_dataset = train_dataset
     self.val_dataset = val_dataset
+    self.kwargs = kwargs
 
     # print_dataset_size(self.train_dataset)
       
@@ -200,7 +202,11 @@ class Trainer:
     self.val_interval = val_interval
     self.autocast = autocast
     self.checkpoint_interval = checkpoint_interval
-    self.kwargs = kwargs
+
+    if hasattr(self, 'kwargs'):
+      self.kwargs.update(kwargs)
+    else:
+      self.kwargs = kwargs
 
     if num_nodes == 1:
       # Single process mode - run directly for debugging
@@ -239,7 +245,7 @@ class Trainer:
         autocast=autocast,
         checkpoint_interval=checkpoint_interval,
         trainer_class=self.__class__,
-        kwargs=kwargs
+        kwargs=self.kwargs
       )
       averaged_state_dict = launch(config)
       
@@ -318,7 +324,11 @@ class LocalTrainer(Trainer):
     All ranks are assumed to be on the same machine, and device is defaulted to cpu.
     '''
     os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = str(12355 + (10 if self.device == 'cpu' else 0))
+
+    if self.kwargs.get('port', None) is not None:
+      os.environ['MASTER_PORT'] = str(self.kwargs['port'])
+    else:
+      os.environ['MASTER_PORT'] = str(12355 + (10 if self.device == 'cpu' else 0))
 
     if self.device == '' or self.device == None:
       if torch.cuda.is_available():

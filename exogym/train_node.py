@@ -166,6 +166,9 @@ class TrainNode(LogModule):
             self._save_checkpoint()
 
     def _evaluate(self):
+        if self.val_size == 0:
+            return
+
         model_clone = copy.deepcopy(self.model)
 
         for name, param in model_clone.named_parameters():
