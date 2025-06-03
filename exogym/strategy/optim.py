@@ -1,6 +1,6 @@
 import torch
 
-from typing import Type, Union
+from typing import Type, Union, Optional
 
 from dataclasses import dataclass 
 from typing import Dict, Any
@@ -36,10 +36,13 @@ class OptimSpec:
         return self.cls(model.parameters(), **(self.kwargs or {}))
 
 
-def ensure_optim_spec(optim: Union[str, OptimSpec, None], **kwargs) -> OptimSpec:
+def ensure_optim_spec(optim: Union[str, OptimSpec, None], default: Optional[OptimSpec] = None, **kwargs) -> OptimSpec:
     """Convert string or OptimSpec to OptimSpec instance."""
     if optim is None:
-        return OptimSpec(torch.optim.AdamW, **kwargs)
+        if default is None:
+            return OptimSpec(torch.optim.AdamW, **kwargs)
+        else:
+            return default
     elif isinstance(optim, str):
         return OptimSpec.from_string(optim, **kwargs)
     elif isinstance(optim, OptimSpec):
