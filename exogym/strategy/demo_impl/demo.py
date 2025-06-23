@@ -22,7 +22,7 @@
 
 This implements the DeMo fused optimizer and data parallel algorithm.
 It is recommended to use DeMo as the base data parallelism.
-In an exisiting codebase that uses PyTorch DDP, wrap your forward-backward in 
+In an exisiting codebase that uses PyTorch DDP, wrap your forward-backward in
 `torch.distributed.DistributedDataParallel.no_sync` to disable external gradient synchronization.
 See https://pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html#torch.nn.parallel.DistributedDataParallel.no_sync
 """
@@ -34,6 +34,7 @@ import torch.distributed as dist
 
 from einops import rearrange
 from typing import Optional, Callable
+
 
 class DeMo(torch.optim.SGD):
     def __init__(
@@ -76,7 +77,9 @@ class DeMo(torch.optim.SGD):
         if self.compression_decay < 0:
             raise ValueError("Negative compression_decay is currently not supported")
         if self.compression_decay >= 1:
-            raise ValueError("Values of compression_decay bigger or equal to 1.0 is currently not supported")
+            raise ValueError(
+                "Values of compression_decay bigger or equal to 1.0 is currently not supported"
+            )
 
         self.demo_state = {}
         self._init_demo_states()
@@ -114,20 +117,27 @@ class DeMo(torch.optim.SGD):
                     state["delta"] = torch.zeros_like(p)
 
     def _demo_all_gather(self, sparse_idx, sparse_val):
-        world_size = dist.get_world_size() if self.process_group is None else self.process_group.size()
+        world_size = (
+            dist.get_world_size()
+            if self.process_group is None
+            else self.process_group.size()
+        )
 
         # Gather all the idx and vals
         sparse_idx_list = [torch.zeros_like(sparse_idx) for wi in range(world_size)]
         sparse_val_list = [torch.zeros_like(sparse_val) for wi in range(world_size)]
 
-        sparse_idx_handle = self.all_gather(sparse_idx_list, sparse_idx, group=self.process_group, async_op=True)
-        sparse_val_handle = self.all_gather(sparse_val_list, sparse_val, group=self.process_group, async_op=True)
+        sparse_idx_handle = self.all_gather(
+            sparse_idx_list, sparse_idx, group=self.process_group, async_op=True
+        )
+        sparse_val_handle = self.all_gather(
+            sparse_val_list, sparse_val, group=self.process_group, async_op=True
+        )
 
         sparse_idx_handle.wait()
         sparse_val_handle.wait()
 
         return sparse_idx_list, sparse_val_list
-
 
     @torch.no_grad()
     def step(self, closure: Callable | None = None):
@@ -170,7 +180,9 @@ class DeMo(torch.optim.SGD):
                 state["delta"].sub_(transmit_grad)
 
                 # All-gather
-                sparse_idx_gather, sparse_val_gather = self._demo_all_gather(sparse_idx, sparse_val)
+                sparse_idx_gather, sparse_val_gather = self._demo_all_gather(
+                    sparse_idx, sparse_val
+                )
 
                 # Log I/O data size
                 self.data_transmit += sparse_idx.nbytes + sparse_val.nbytes
@@ -179,7 +191,9 @@ class DeMo(torch.optim.SGD):
 
                 # Decode grad from all nodes
                 new_grad = self.transform.decode(
-                    self.compress.batch_decompress(p, sparse_idx_gather, sparse_val_gather, xshape, totalk)
+                    self.compress.batch_decompress(
+                        p, sparse_idx_gather, sparse_val_gather, xshape, totalk
+                    )
                 )
 
                 # Set grad to values
@@ -193,7 +207,8 @@ class DeMo(torch.optim.SGD):
 
         # SGD step
         return super().step(closure)
-    
+
+
 class TransformDCT:
     @torch.no_grad()
     def __init__(self, param_groups, target_chunk, norm="ortho"):
@@ -288,6 +303,7 @@ class TransformDCT:
 
         return x
 
+
 class CompressDCT:
     @torch.no_grad()
     def __init__(self):
@@ -327,7 +343,9 @@ class CompressDCT:
             x = rearrange(x, "y x h w -> y x (h w)")
 
         # TODO: Careful, this is nondeterministic across different CUDA devices! might cause errors to accumulate between nodes!
-        x.scatter_reduce_(dim=-1, index=idx, src=val, reduce="mean", include_self=False).reshape(xshape)
+        x.scatter_reduce_(
+            dim=-1, index=idx, src=val, reduce="mean", include_self=False
+        ).reshape(xshape)
 
         if len(x.shape) > 2:  # 2D weights
             x = rearrange(x, "y x (h w) -> y x h w", h=xshape[2])
@@ -407,7 +425,11 @@ def _idct(X, norm=None):
         X_v[:, 0] *= math.sqrt(N) * 2
         X_v[:, 1:] *= math.sqrt(N / 2) * 2
 
-    k = torch.arange(x_shape[-1], dtype=X.dtype, device=X.device)[None, :] * math.pi / (2 * N)
+    k = (
+        torch.arange(x_shape[-1], dtype=X.dtype, device=X.device)[None, :]
+        * math.pi
+        / (2 * N)
+    )
     W_r = torch.cos(k)
     W_i = torch.sin(k)
 

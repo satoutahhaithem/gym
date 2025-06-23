@@ -6,15 +6,19 @@ import copy
 
 from typing import Dict, Any, Optional, Union
 
-from .communicate_optimize_strategy import CommunicateOptimizeStrategy, CommunicationModule
+from .communicate_optimize_strategy import (
+    CommunicateOptimizeStrategy,
+    CommunicationModule,
+)
 from .optim import OptimSpec, ensure_optim_spec
 from .communicate import *
+
 
 class SparseCommunicator(CommunicationModule):
     """
     Communication module for sparse parameter communication (like SPARTA).
     """
-    
+
     def __init__(self, index_selector, **kwargs):
         super().__init__(**kwargs)
         self.index_selector = index_selector
@@ -28,7 +32,9 @@ class SparseCommunicator(CommunicationModule):
                     if not param.requires_grad or param.grad is None:
                         continue
 
-                    indices_mask = self.index_selector.get_indices(param, self.iteration)
+                    indices_mask = self.index_selector.get_indices(
+                        param, self.iteration
+                    )
 
                     # Broadcasting a mask might be needed
                     broadcast(indices_mask, src=0)
@@ -43,23 +49,25 @@ class SparseCommunicator(CommunicationModule):
     def _init_node(self, model, rank, num_nodes):
         pass
 
+
 class SPARTAStrategy(CommunicateOptimizeStrategy):
-    def __init__(self, 
-                 inner_optim: Optional[Union[str, OptimSpec]] = None,
-                 p_sparta=0.005,
-                 **kwargs):
+    def __init__(
+        self,
+        inner_optim: Optional[Union[str, OptimSpec]] = None,
+        p_sparta=0.005,
+        **kwargs,
+    ):
 
         # Create index selector and sparse communicator
         index_selector = RandomIndexSelector(p_sparta)
         sparse_comm = SparseCommunicator(index_selector)
-        
+
         super().__init__(
-            inner_optim=inner_optim,
-            communication_modules=[sparse_comm],
-            **kwargs
+            inner_optim=inner_optim, communication_modules=[sparse_comm], **kwargs
         )
 
         self.index_selector = index_selector
+
 
 class IndexSelector:
     def __init__(self, p):
@@ -75,7 +83,10 @@ class IndexSelector:
 class RandomIndexSelector(IndexSelector):
     # Update signature to match base class
     def get_indices(self, param, iteration):
-        return torch.bernoulli(torch.full(param.shape, self.p, device=param.device)).bool()
+        return torch.bernoulli(
+            torch.full(param.shape, self.p, device=param.device)
+        ).bool()
+
 
 class ShuffledSequentialIndexSelector(IndexSelector):
     def __init__(self, p):
@@ -91,7 +102,9 @@ class ShuffledSequentialIndexSelector(IndexSelector):
 
         # Initialize state for this parameter if not seen before
         if param not in self.state:
-            num_partitions = max(1, math.ceil(1.0 / self.p)) # Ensure at least 1 partition
+            num_partitions = max(
+                1, math.ceil(1.0 / self.p)
+            )  # Ensure at least 1 partition
             shuffled_indices = torch.randperm(num_total, device=param.device)
             self.state[param] = {
                 "num_partitions": num_partitions,
@@ -119,7 +132,9 @@ class ShuffledSequentialIndexSelector(IndexSelector):
 
         # Create and return the boolean mask
         mask = torch.zeros(num_total, dtype=torch.bool, device=param.device)
-        if selected_flat_indices.numel() > 0: # Handle empty selection if num_total is very small
+        if (
+            selected_flat_indices.numel() > 0
+        ):  # Handle empty selection if num_total is very small
             mask[selected_flat_indices] = True
         return mask.view(param.shape)
 
@@ -139,12 +154,14 @@ class PartitionedIndexSelector(IndexSelector):
         param_state["num_partitions"] = num_partitions
         if param.numel() > 0:
             param_state["partitions"] = (
-                torch.rand(param.numel(), device=param.device).argsort() % num_partitions
+                torch.rand(param.numel(), device=param.device).argsort()
+                % num_partitions
             )
         else:
             # Handle zero-element tensors
-            param_state["partitions"] = torch.empty(0, dtype=torch.long, device=param.device)
-
+            param_state["partitions"] = torch.empty(
+                0, dtype=torch.long, device=param.device
+            )
 
     # Update signature, though iteration is unused here
     def get_indices(self, param, iteration):
@@ -160,16 +177,19 @@ class PartitionedIndexSelector(IndexSelector):
             self._set_partition(param)
 
         param_state = self.state[param]
-        
+
         # Need to handle case where num_partitions might be 0 if numel was 0 during _set_partition
         # Although we added checks for numel=0, ensure partition access is safe
         if param_state["num_partitions"] == 0:
-            return torch.zeros_like(param, dtype=torch.bool) # Should not happen if numel > 0
-
+            return torch.zeros_like(
+                param, dtype=torch.bool
+            )  # Should not happen if numel > 0
 
         # Indices calculation requires reshaping the flat partitions result
-        partition_indices = (param_state["partitions"] == param_state["curr_partition"])
-        indices_mask = partition_indices.view(param.shape).bool() # Reshape flat bool tensor to param shape
+        partition_indices = param_state["partitions"] == param_state["curr_partition"]
+        indices_mask = partition_indices.view(
+            param.shape
+        ).bool()  # Reshape flat bool tensor to param shape
 
         param_state["curr_partition"] += 1
 
