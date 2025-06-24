@@ -7,19 +7,15 @@ from exogym.train_node import TrainNode
 from exogym.strategy import Strategy
 
 import os
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 import copy
 from dataclasses import dataclass
-from typing import Tuple, Optional, List, Any, Dict, Union, Callable
+from typing import Optional, List, Any, Dict, Union, Callable
 from collections import OrderedDict
 
-# def print_dataset_size(dataset: torch.utils.data.Dataset):
-#   from pympler import asizeof
-#   print(f"Dataset size: {asizeof.asizeof(dataset)}")
-
-
 def print_dataset_size(dataset: torch.utils.data.Dataset):
-    import pickle, sys, io
+    import pickle
+    import io
 
     buffer = io.BytesIO()
     pickle.dump(dataset, buffer, protocol=pickle.HIGHEST_PROTOCOL)
@@ -176,14 +172,14 @@ class Trainer:
             torch.utils.data.Dataset,
             Callable[[int, int, bool], torch.utils.data.Dataset],
         ],
+        start_port: Optional[int] = None,
         **kwargs,
     ):
-        self.model = model
+        self.model_orig = model
         self.train_dataset = train_dataset
         self.val_dataset = val_dataset
         self.kwargs = kwargs
-
-        # print_dataset_size(self.train_dataset)
+        self.port = start_port if start_port is not None else 12355
 
     def fit(
         self,
@@ -227,57 +223,40 @@ class Trainer:
         else:
             self.kwargs = kwargs
 
-        if num_nodes == 1:
-            # Single process mode - run directly for debugging
-            # Set random seeds
-            seed = kwargs.get("seed", 42)
-            torch.manual_seed(seed)
-            torch.cuda.manual_seed(seed)
-            np.random.seed(seed)
+        self.port += 1
 
-            torch.backends.cuda.matmul.allow_tf32 = True
-            torch.backends.cudnn.allow_tf32 = True
+        # Move a *copy* of the model to CPU so that pickling for mp.spawn does not attempt to share GPU storage.
+        cpu_model = copy.deepcopy(self.model_orig).cpu()
 
-            final_state_dict = self._fit_process(rank=0)
+        config = TrainingConfig(
+            model=cpu_model,
+            train_dataset=self.train_dataset,
+            val_dataset=self.val_dataset,
+            strategy=strategy,
+            num_epochs=num_epochs,
+            num_nodes=num_nodes,
+            max_steps=max_steps,
+            device=device,
+            devices=devices,
+            batch_size=batch_size,
+            minibatch_size=minibatch_size,
+            shuffle=shuffle,
+            val_size=val_size,
+            val_interval=val_interval,
+            autocast=autocast,
+            checkpoint_interval=checkpoint_interval,
+            trainer_class=self.__class__,
+            kwargs=self.kwargs,
+        )
+        averaged_state_dict = launch(config)
 
-            # Create a copy of the original model and load the final state
-            final_model = copy.deepcopy(self.model)
-            final_model.load_state_dict(final_state_dict)
+        if averaged_state_dict is not None:
+            # Create a copy of the original model and load the averaged state
+            final_model = copy.deepcopy(self.model_orig)
+            final_model.load_state_dict(averaged_state_dict)
             return final_model
         else:
-            # Multi-process mode - use safe launcher
-            # Move a *copy* of the model to CPU so that pickling for mp.spawn does not attempt to share GPU storage.
-            cpu_model = copy.deepcopy(self.model).cpu()
-
-            config = TrainingConfig(
-                model=cpu_model,
-                train_dataset=self.train_dataset,
-                val_dataset=self.val_dataset,
-                strategy=strategy,
-                num_epochs=num_epochs,
-                num_nodes=num_nodes,
-                max_steps=max_steps,
-                device=device,
-                devices=devices,
-                batch_size=batch_size,
-                minibatch_size=minibatch_size,
-                shuffle=shuffle,
-                val_size=val_size,
-                val_interval=val_interval,
-                autocast=autocast,
-                checkpoint_interval=checkpoint_interval,
-                trainer_class=self.__class__,
-                kwargs=self.kwargs,
-            )
-            averaged_state_dict = launch(config)
-
-            if averaged_state_dict is not None:
-                # Create a copy of the original model and load the averaged state
-                final_model = copy.deepcopy(self.model)
-                final_model.load_state_dict(averaged_state_dict)
-                return final_model
-            else:
-                return None
+            return None
 
     def _fit_process(self, rank):
         """
@@ -289,9 +268,7 @@ class Trainer:
 
         self._build_connection()
 
-        # print_dataset_size(self.train_dataset)
-
-        self.model = copy.deepcopy(self.model).to(self.device)
+        self.model = copy.deepcopy(self.model_orig).to(self.device)
 
         self.strategy = copy.deepcopy(self.strategy)
         self.strategy._init_node(self.model, self.rank, self.num_nodes)
@@ -351,11 +328,7 @@ class LocalTrainer(Trainer):
         All ranks are assumed to be on the same machine, and device is defaulted to cpu.
         """
         os.environ["MASTER_ADDR"] = "localhost"
-
-        if self.kwargs.get("port", None) is not None:
-            os.environ["MASTER_PORT"] = str(self.kwargs["port"])
-        else:
-            os.environ["MASTER_PORT"] = str(12355 + (10 if self.device == "cpu" else 0))
+        os.environ["MASTER_PORT"] = str(self.port)
 
         if self.device == "" or self.device == None:
             if torch.cuda.is_available():
