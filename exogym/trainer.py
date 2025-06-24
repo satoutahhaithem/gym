@@ -246,8 +246,11 @@ class Trainer:
             return final_model
         else:
             # Multi-process mode - use safe launcher
+            # Move a *copy* of the model to CPU so that pickling for mp.spawn does not attempt to share GPU storage.
+            cpu_model = copy.deepcopy(self.model).cpu()
+
             config = TrainingConfig(
-                model=self.model,
+                model=cpu_model,
                 train_dataset=self.train_dataset,
                 val_dataset=self.val_dataset,
                 strategy=strategy,
