@@ -7,25 +7,24 @@ import torch
 from typing import Optional, Union
 
 from .strategy import Strategy
-from .communicate_optimize_strategy import CommunicationModule
 from .optim import OptimSpec, ensure_optim_spec
-from .communicate import *
+from .communicate import all_reduce, broadcast
 
 
 class DiLoCoStrategy(Strategy):
     def __init__(
         self,
-        inner_optim: Optional[Union[str, OptimSpec]] = None,
-        outer_optim: Optional[Union[str, OptimSpec]] = None,
+        optim_spec: Optional[Union[str, OptimSpec]] = None, # inner optimizer is named optim_spec for consistency
+        outer_optim_spec: Optional[Union[str, OptimSpec]] = None,
         H: int = 100,
         **kwargs,
     ):
 
         self.inner_optim_spec = ensure_optim_spec(
-            inner_optim, OptimSpec(torch.optim.AdamW)
+            optim_spec, OptimSpec(torch.optim.AdamW)
         )
         self.outer_optim_spec = ensure_optim_spec(
-            outer_optim, OptimSpec(torch.optim.SGD, lr=0.7, nesterov=True, momentum=0.9)
+            outer_optim_spec, OptimSpec(torch.optim.SGD, lr=0.7, nesterov=True, momentum=0.9)
         )
 
         self.H = H

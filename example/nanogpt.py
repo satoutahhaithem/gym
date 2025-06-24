@@ -195,7 +195,7 @@ def create_strategy(args):
             momentum=args.outer_momentum,
         )
         return DiLoCoStrategy(
-            inner_optim_spec=inner_optim,
+            optim_spec=inner_optim,
             outer_optim_spec=outer_optim,
             H=args.diloco_interval,
             lr_scheduler="lambda_cosine",

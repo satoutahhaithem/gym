@@ -102,7 +102,7 @@ def run_sweep():
         trainer = LocalTrainer(model, train_ds, val_ds)
 
         strategy = Strat(
-            inner_optim=optim_spec,
+            optim_spec=optim_spec,
             H=10,
             lr_scheduler="lambda_cosine",
             lr_scheduler_kwargs={"warmup_steps": 100, "cosine_anneal": True},
