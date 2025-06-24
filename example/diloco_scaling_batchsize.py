@@ -9,8 +9,8 @@ import torch
 
 MAX_NODES = 4
 H = 30
-# TOTAL_TOKENS = (2**15) * (2**10)  # 1024 steps for smallest GBS
-TOTAL_TOKENS = (2**15) * 10  # 1024 steps for smallest GBS
+TOTAL_TOKENS = (2**15) * (2**10)  # 1024 steps for smallest GBS
+# TOTAL_TOKENS = (2**15) * 10  # 1024 steps for smallest GBS
 SEQ_LEN = 2**10
 
 ### PLAYGROUND
@@ -54,14 +54,9 @@ def main():
     #     n_embd=512,
     #     dropout=0.0,
     # )
-    gpt_config = GPTConfig(
-        vocab_size=vocab_size,
-        block_size=SEQ_LEN,
-        n_layer=2,
-        n_head=2,
-        n_embd=128,
-        dropout=0.2,
-    )
+    gpt_config = GPTConfig.gpt2_small()
+    gpt_config.dropout = 0.2
+    gpt_config.vocab_size = vocab_size
 
     model = GPT(gpt_config)
     trainer = LocalTrainer(
@@ -73,10 +68,11 @@ def main():
 
 
     global_batch_list = [2**15, 2**16, 2**17, 2**18]
+    global_batch_list = [2**10 * 2**4 * 4]
 
     for global_batch in global_batch_list:
         strategy = SimpleReduceStrategy(
-            optim_spec=OptimSpec(torch.optim.AdamW, lr=0.0004),
+            optim_spec=OptimSpec(torch.optim.AdamW, lr=0.001),
             lr_scheduler="lambda_cosine",
             lr_scheduler_kwargs={
                 "warmup_steps": 1000,
@@ -101,12 +97,13 @@ def main():
 
         for K in [1, 2, 4]:
             strategy = DiLoCoStrategy(
-                optim_spec=OptimSpec(torch.optim.AdamW, lr=0.0004),
+                optim_spec=OptimSpec(torch.optim.AdamW, lr=0.001),
                 lr_scheduler="lambda_cosine",
                 lr_scheduler_kwargs={
                     "warmup_steps": 1000,
                     "cosine_anneal": True,
                 },
+                max_norm=1.0,
                 H=H,
             )
 
@@ -119,8 +116,7 @@ def main():
                 num_nodes=K,
                 device="mps",
                 batch_size=global_batch // SEQ_LEN // K,
-                minibatch_size=32
-                // K,  # Gradient accumulation to ensure we can fit in memory for a 96GB machine. Make this even lower for smaller devices.
+                minibatch_size=32 // K,  # Gradient accumulation to ensure we can fit in memory for a 96GB machine. Make this even lower for smaller devices.
                 shuffle=False,
                 val_size=256,
                 val_interval=100,
