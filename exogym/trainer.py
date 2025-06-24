@@ -93,34 +93,6 @@ def _worker(rank: int, config: TrainingConfig, result_queue: mp.Queue):
     # Put the result in the queue
     result_queue.put((rank, cpu_state_dict))
 
-
-def launch(config: TrainingConfig):
-    """
-    Spawn `num_nodes` processes using mp.spawn and collect their final models.
-    """
-    # Create a manager and queue for collecting results
-    manager = mp.Manager()
-    result_queue = manager.Queue()
-
-    # Use mp.spawn with the result queue
-    mp.spawn(
-        _worker,
-        args=(config, result_queue),
-        nprocs=config.num_nodes,
-        start_method="spawn",
-        join=True,
-    )
-
-    # Collect results
-    model_states = {}
-    for _ in range(config.num_nodes):
-        rank, state_dict = result_queue.get()
-        model_states[rank] = state_dict
-
-    # Average the models
-    return _average_model_states(model_states)
-
-
 def _average_model_states(model_states: Dict[int, OrderedDict]) -> OrderedDict:
     """Average model state dictionaries from multiple processes."""
     if not model_states:
@@ -234,7 +206,28 @@ class Trainer:
             trainer_class=self.__class__,
             kwargs=self.kwargs,
         )
-        averaged_state_dict = launch(config)
+        
+        # Create a manager and queue for collecting results
+        manager = mp.Manager()
+        result_queue = manager.Queue()
+
+        # Use mp.spawn with the result queue
+        mp.spawn(
+            _worker,
+            args=(config, result_queue),
+            nprocs=config.num_nodes,
+            start_method="spawn",
+            join=True,
+        )
+
+        # Collect results
+        model_states = {}
+        for _ in range(config.num_nodes):
+            rank, state_dict = result_queue.get()
+            model_states[rank] = state_dict
+
+        # Average the models
+        averaged_state_dict = _average_model_states(model_states)
 
         if averaged_state_dict is not None:
             # Create a copy of the original model and load the averaged state
