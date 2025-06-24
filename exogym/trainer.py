@@ -94,22 +94,10 @@ def _worker(rank: int, config: TrainingConfig, result_queue: mp.Queue):
     result_queue.put((rank, cpu_state_dict))
 
 
-def launch(config: TrainingConfig, num_nodes: int = None):
+def launch(config: TrainingConfig):
     """
     Spawn `num_nodes` processes using mp.spawn and collect their final models.
     """
-    if num_nodes is not None:
-        config.num_nodes = num_nodes
-
-    # Set random seeds before spawning
-    seed = config.kwargs.get("seed", 42)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    np.random.seed(seed)
-
-    torch.backends.cuda.matmul.allow_tf32 = True
-    torch.backends.cudnn.allow_tf32 = True
-
     # Create a manager and queue for collecting results
     manager = mp.Manager()
     result_queue = manager.Queue()
@@ -130,9 +118,7 @@ def launch(config: TrainingConfig, num_nodes: int = None):
         model_states[rank] = state_dict
 
     # Average the models
-    if model_states:
-        return _average_model_states(model_states)
-    return None
+    return _average_model_states(model_states)
 
 
 def _average_model_states(model_states: Dict[int, OrderedDict]) -> OrderedDict:

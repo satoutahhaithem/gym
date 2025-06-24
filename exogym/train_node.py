@@ -47,6 +47,13 @@ class TrainNode(LogModule):
         autocast: bool = False,
         **kwargs,
     ):
+        seed = kwargs.get("seed", 42)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        np.random.seed(seed)
+
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
 
         self.model = model
 
@@ -123,10 +130,6 @@ class TrainNode(LogModule):
         self.val_data_iter = iter(self.val_dataloader)
 
     def _get_batch(self, eval=False):
-        import time
-
-        start_time = time.time()
-
         if not eval or self.val_data_iter is None:
             try:
                 batch = next(self.train_data_iter)
@@ -145,9 +148,6 @@ class TrainNode(LogModule):
             batch = tuple(x.to(self.device) for x in batch)
         else:
             batch = batch.to(self.device)
-
-        end_time = time.time()
-        # print(f"Batch collection time: {end_time - start_time:.4f} seconds")
 
         return batch
 
@@ -616,13 +616,6 @@ class TrainNode(LogModule):
             #     self._correlation_calculation()
 
             dist.barrier()
-
-            def print_dataset_size(dataset: torch.utils.data.Dataset):
-                import pickle, sys, io
-
-                buffer = io.BytesIO()
-                pickle.dump(dataset, buffer, protocol=pickle.HIGHEST_PROTOCOL)
-                print(f"Dataset size: {buffer.tell() // 1024 // 1024} MB")
 
         self._evaluate()
 
