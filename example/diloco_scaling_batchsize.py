@@ -11,6 +11,7 @@ MAX_NODES = 4
 H = 30
 # TOTAL_TOKENS = (2**15) * (2**10)  # 1024 steps for smallest GBS
 TOTAL_TOKENS = (2**15) * 10  # 1024 steps for smallest GBS
+SEQ_LEN = 2**10
 
 ### PLAYGROUND
 ### This is a minimal configuration for training a nanogpt model with a given strategy.
@@ -31,14 +32,14 @@ def main():
     # )
     train_dataset, vocab_size = get_dataset(
         "shakespeare",
-        block_size=1024,
+        block_size=SEQ_LEN,
         device="cpu",
         start_pc=0.0,
         end_pc=0.99
     )
     val_dataset, vocab_size = get_dataset(
         "shakespeare", 
-        block_size=1024, 
+        block_size=SEQ_LEN, 
         device="cpu", 
         start_pc=0.99, 
         end_pc=1.0
@@ -55,7 +56,7 @@ def main():
     # )
     gpt_config = GPTConfig(
         vocab_size=vocab_size,
-        block_size=1024,
+        block_size=SEQ_LEN,
         n_layer=2,
         n_head=2,
         n_embd=128,
@@ -90,7 +91,7 @@ def main():
             strategy=strategy,
             num_nodes=1,
             device="mps",
-            batch_size=global_batch // 2**10,
+            batch_size=global_batch // SEQ_LEN,
             shuffle=False,
             val_size=256,
             val_interval=100,
@@ -113,11 +114,11 @@ def main():
 
             trainer.fit(
                 num_epochs=1,
-                max_steps=TOTAL_TOKENS // global_batch // K,
+                max_steps=TOTAL_TOKENS // global_batch,
                 strategy=strategy,
                 num_nodes=K,
                 device="mps",
-                batch_size=global_batch // 2**10 // K,
+                batch_size=global_batch // SEQ_LEN // K,
                 minibatch_size=32
                 // K,  # Gradient accumulation to ensure we can fit in memory for a 96GB machine. Make this even lower for smaller devices.
                 shuffle=False,
