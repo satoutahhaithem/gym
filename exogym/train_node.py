@@ -10,7 +10,7 @@ from typing import Union, Callable
 
 from .strategy.strategy import Strategy
 from .logger import WandbLogger, CSVLogger
-from .strategy.communicate import *
+from .strategy.communicate import all_reduce, broadcast
 from .utils import LogModule
 
 # change to two-space indent instead of four-space (which is what it is at the moment)

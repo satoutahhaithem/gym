@@ -1,21 +1,5 @@
-"""DeMo: Decoupled Momentum Optimization
-
-This implements the DeMo fused optimizer and data parallel algorithm.
-It is recommended to use DeMo as the base data parallelism.
-In an exisiting codebase that uses PyTorch DDP, wrap your forward-backward in
-`torch.distributed.DistributedDataParallel.no_sync` to disable external gradient synchronization.
-See https://pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html#torch.nn.parallel.DistributedDataParallel.no_sync
-"""
-
-import math
-import torch
-import torch.fft
-import torch.distributed as dist
-
-from typing import Optional, Callable
-
 from .strategy import Strategy
-from .communicate import *
+from .communicate import all_gather
 
 from .demo_impl.demo import DeMo
 
@@ -30,13 +14,6 @@ class DeMoStrategy(Strategy):
         weight_decay: float = 0.0,
         **kwargs,
     ):
-        try:
-            from einops import rearrange
-        except ImportError:
-            raise ImportError(
-                "einops is not installed. Please install it using `pip install einops`."
-            )
-
         super().__init__(**kwargs)
 
         # Store DeMo-specific parameters

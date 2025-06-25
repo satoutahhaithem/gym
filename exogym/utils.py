@@ -1,6 +1,5 @@
 import torch
-import numpy as np
-from typing import Any, Dict, Union, List
+from typing import Any, Dict, List
 
 
 class LogModule:
@@ -42,23 +41,17 @@ def extract_config(obj, max_depth=10, current_depth=0):
 
     # Handle sequences (but avoid strings which are also sequences)
     if isinstance(obj, (list, tuple)) and not isinstance(obj, str):
-        try:
-            return [
-                extract_config(item, max_depth, current_depth + 1) for item in obj[:10]
-            ]  # Limit to first 10 items
-        except:
-            return f"<{type(obj).__name__} with {len(obj)} items>"
+        return [
+            extract_config(item, max_depth, current_depth + 1) for item in obj[:10]
+        ]  # Limit to first 10 items
 
     # Handle dictionaries
     if isinstance(obj, dict):
-        try:
-            result = {}
-            for key, value in obj.items():
-                if isinstance(key, str) and len(result) < 50:  # Limit number of keys
-                    result[key] = extract_config(value, max_depth, current_depth + 1)
-            return result
-        except:
-            return f"<dict with {len(obj)} items>"
+        result = {}
+        for key, value in obj.items():
+            if isinstance(key, str) and len(result) < 50:  # Limit number of keys
+                result[key] = extract_config(value, max_depth, current_depth + 1)
+        return result
 
     if isinstance(obj, torch.device):
         return obj.__str__()
@@ -89,32 +82,21 @@ def extract_config(obj, max_depth=10, current_depth=0):
 
     # Handle objects with __dict__ (like config objects)
     if hasattr(obj, "__dict__"):
-        try:
-            result = {}
-            for key, value in obj.__dict__.items():
-                if (
-                    not key.startswith("_") and len(result) < 50
-                ):  # Skip private attributes
-                    try:
-                        result[key] = extract_config(
-                            value, max_depth, current_depth + 1
-                        )
-                    except:
-                        result[key] = f"<error extracting {key}>"
-            return result
-        except:
-            return f"<{type(obj).__name__} object>"
+        result = {}
+        for key, value in obj.__dict__.items():
+            if (
+                not key.startswith("_") and len(result) < 50
+            ):  # Skip private attributes
+                result[key] = extract_config(
+                    value, max_depth, current_depth + 1
+                )
+        return result
 
     # For other objects, try to get basic info
-    try:
-        print(obj, type(obj))
-        if type(obj) in [float, int, str, bool]:
-            return obj
-        else:
-            return f"<{type(obj).__name__}>"
+    if type(obj) in [float, int, str, bool]:
+        return obj
+    else:
         return f"<{type(obj).__name__}>"
-    except:
-        return "<unknown object>"
 
 
 def create_config(
@@ -145,16 +127,13 @@ def create_config(
         )
 
         # Try to get parameter count
-        try:
-            if hasattr(model, "get_num_params"):
-                wandb_config["model_parameters"] = model.get_num_params() / 1e6
-            else:
-                # Fallback to counting parameters
-                wandb_config["model_parameters"] = (
-                    sum(p.numel() for p in model.parameters()) / 1e6
-                )
-        except:
-            wandb_config["model_parameters"] = "unknown"
+        if hasattr(model, "get_num_params"):
+            wandb_config["model_parameters"] = model.get_num_params() / 1e6
+        else:
+            # Fallback to counting parameters
+            wandb_config["model_parameters"] = (
+                sum(p.numel() for p in model.parameters()) / 1e6
+            )
 
     # Extra configuration
     if extra_config:

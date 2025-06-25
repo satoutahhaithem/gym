@@ -1,7 +1,6 @@
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
-import numpy as np
 
 from exogym.train_node import TrainNode
 from exogym.strategy import Strategy
@@ -309,7 +308,7 @@ class LocalTrainer(Trainer):
         os.environ["MASTER_ADDR"] = "localhost"
         os.environ["MASTER_PORT"] = str(self.port)
 
-        if self.device == "" or self.device == None:
+        if self.device == "" or self.device is None:
             if torch.cuda.is_available():
                 self.device = "cuda"
             elif torch.backends.mps.is_available():

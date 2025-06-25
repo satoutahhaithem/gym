@@ -12,7 +12,7 @@ def generate_char_vocab():
     """
     vocab = " !$&',-.3:;?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz\n"
     char_int = {char: i for i, char in enumerate(vocab)}
-    int_char = {i: char for i, char in enumerate(vocab)}
+    # int_char = {i: char for i, char in enumerate(vocab)}
 
     # Define a special end-of-sequence token.
     eos_token = "<EOS>"
@@ -70,12 +70,12 @@ def build_dataset_small(dataset, block_size=1024, start_pc=0.0, end_pc=1.0):
     # Determine the dataset identifier and mapping function.
     if dataset == "shakespeare":
         dataset_id = "Trelis/tiny-shakespeare"
-        mapping_fn = lambda x: {"text": x["Text"]}
+        def mapping_fn(x): return {"text": x["Text"]}
         load_config = {}
     elif dataset == "wikitext":
         dataset_id = "wikitext"
         config = "wikitext-2-raw-v1"
-        mapping_fn = lambda x: {"text": x["text"]}
+        def mapping_fn(x): return {"text": x["text"]}
         load_config = {"name": config}
     else:
         raise ValueError(f"Unknown dataset: {dataset}")
@@ -203,7 +203,6 @@ def build_dataset_owt(start_pc=0.0, end_pc=1.0, max_workers=8):
     )
 
     dataset_id = "Skylion007/openwebtext"
-    mapping_fn = lambda x: x  # Assume openwebtext already has a 'text' field.
     load_config = {"trust_remote_code": True}
 
     # Use the dataset builder to obtain the total number of records.

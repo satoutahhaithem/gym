@@ -2,7 +2,7 @@ from tqdm import tqdm
 import numpy as np
 from torch import nn
 
-from .utils import extract_config, create_config
+from .utils import create_config
 
 import json
 import os
@@ -17,7 +17,7 @@ class Logger:
 
         self.pbar = tqdm(total=self.max_steps, initial=0)
 
-        tqdm.write(f"Logger initialized.")
+        tqdm.write("Logger initialized.")
 
         self.step = 0
         self.current_lr = 0

@@ -6,9 +6,9 @@ import torch.nn.utils as nn_utils
 
 from typing import Dict, Any
 
-from .communicate import *
+from .communicate import all_reduce
 
-from exogym.utils import *
+from exogym.utils import LogModule
 
 from abc import ABC, abstractmethod
 

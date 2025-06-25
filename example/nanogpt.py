@@ -4,7 +4,6 @@ from exogym.strategy.optim import OptimSpec
 
 import argparse
 import torch
-import numpy as np
 
 
 def gen_run_name(args, strategy):

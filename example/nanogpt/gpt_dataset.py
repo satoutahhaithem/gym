@@ -1,7 +1,6 @@
 import torch
 import numpy as np
 import os
-import json
 
 
 class NonContiguousGPTTrainDataset(torch.utils.data.Dataset):

@@ -1,8 +1,7 @@
-import torch
 from typing import Optional, Union
 
 from .communicate_optimize_strategy import CommunicateOptimizeStrategy
-from .optim import OptimSpec, ensure_optim_spec
+from .optim import OptimSpec
 from .sparta import SparseCommunicator, RandomIndexSelector
 from .diloco import DiLoCoCommunicator
 

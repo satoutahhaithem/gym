@@ -231,9 +231,9 @@ class TransformDCT:
 
                     # Pregenerate DCT basis matrices
                     if sc not in self.f_dict:
-                        I = torch.eye(sc)
-                        self.f_dict[sc] = _dct(I, norm=norm).to(p.dtype).to(p.device)
-                        self.b_dict[sc] = _idct(I, norm=norm).to(p.dtype).to(p.device)
+                        identity = torch.eye(sc)
+                        self.f_dict[sc] = _dct(identity, norm=norm).to(p.dtype).to(p.device)
+                        self.b_dict[sc] = _idct(identity, norm=norm).to(p.dtype).to(p.device)
 
     @torch.no_grad()
     def einsum_2d(self, x, b, d=None):
@@ -253,7 +253,6 @@ class TransformDCT:
 
     @torch.no_grad()
     def encode(self, x):
-        from einops import rearrange
 
         if len(x.shape) > 1:  # 2D weights
             n1 = self.shape_dict[x.shape[0]]
@@ -280,7 +279,6 @@ class TransformDCT:
 
     @torch.no_grad()
     def decode(self, x):
-        from einops import rearrange
 
         if len(x.shape) > 2:  # 2D weights
             n1 = x.shape[2]
@@ -318,7 +316,6 @@ class CompressDCT:
 
     @torch.no_grad()
     def compress(self, x, topk):
-        from einops import rearrange
 
         xshape = x.shape
         if len(x.shape) > 2:  # 2D weights
@@ -335,7 +332,6 @@ class CompressDCT:
 
     @torch.no_grad()
     def decompress(self, p, idx, val, xshape, totalk):
-        from einops import rearrange
 
         x = torch.zeros(xshape, device=p.device, dtype=p.dtype)
 

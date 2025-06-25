@@ -1,14 +1,12 @@
 import numpy as np
 import os
-from tqdm import tqdm
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .build_dataset import build_dataset_small, build_dataset_owt
 from .gpt_dataset import ContiguousGPTTrainDataset, LazyNonContiguousGPTTrainDataset
 
 
 def load_chunk(chunk_id, s3_client):
-    cache_location = f"data/owt"
+    cache_location = "data/owt"
     if not os.path.exists(cache_location):
         os.makedirs(cache_location, exist_ok=True)
 

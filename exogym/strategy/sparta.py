@@ -1,18 +1,15 @@
 import math
 import torch
 import torch.distributed as dist
-from torch import nn
-import copy
 
-from typing import Dict, Any, Optional, Union
+from typing import Optional, Union
 
 from .communicate_optimize_strategy import (
     CommunicateOptimizeStrategy,
     CommunicationModule,
 )
-from .optim import OptimSpec, ensure_optim_spec
-from .communicate import *
-
+from .optim import OptimSpec
+from .communicate import all_reduce, broadcast
 
 class SparseCommunicator(CommunicationModule):
     """

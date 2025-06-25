@@ -2,7 +2,6 @@ from exogym.trainer import LocalTrainer
 from nanogpt import GPT, GPTConfig, get_dataset
 from exogym.strategy.optim import OptimSpec
 import torch
-import numpy as np
 
 NUM_NODES = 4
 # NUM_NODES = 2

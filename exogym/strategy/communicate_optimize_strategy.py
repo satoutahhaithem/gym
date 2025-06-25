@@ -5,7 +5,6 @@ from abc import ABC, abstractmethod
 
 from .strategy import Strategy
 from .optim import OptimSpec, ensure_optim_spec
-from .communicate import *
 
 
 class CommunicationModule(ABC):

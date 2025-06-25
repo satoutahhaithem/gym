@@ -5,7 +5,9 @@ from exogym.strategy.sparta import SPARTAStrategy
 from exogym.strategy.strategy import SimpleReduceStrategy
 from exogym.strategy.optim import OptimSpec
 
-import torch, torch.nn as nn, torch.nn.functional as F
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from torchvision import datasets, transforms
 from torch.utils.data import random_split
 

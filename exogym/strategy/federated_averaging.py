@@ -1,9 +1,7 @@
 import torch.distributed as dist
-from copy import deepcopy
 import random
 
 import torch
-from torch.nn import utils as nn_utils
 
 from typing import Optional, Set, Union
 
@@ -11,8 +9,8 @@ from .communicate_optimize_strategy import (
     CommunicateOptimizeStrategy,
     CommunicationModule,
 )
-from .optim import OptimSpec, ensure_optim_spec
-from .communicate import *
+from .optim import OptimSpec
+from .communicate import all_reduce, all_gather
 
 
 class AveragingCommunicator(CommunicationModule):
