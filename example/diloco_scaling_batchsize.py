@@ -9,7 +9,7 @@ import torch
 
 MAX_NODES = 4
 H = 30
-TOTAL_TOKENS = (2**15) * (2**10)  # 1024 steps for smallest GBS
+TOTAL_TOKENS = (2**15) * (2**13)  # 1024 steps for smallest GBS
 # TOTAL_TOKENS = (2**15) * 10  # 1024 steps for smallest GBS
 SEQ_LEN = 2**10
 
@@ -35,13 +35,13 @@ def main():
         block_size=SEQ_LEN,
         device="cpu",
         start_pc=0.0,
-        end_pc=0.99
+        end_pc=0.9
     )
     val_dataset, vocab_size = get_dataset(
         "shakespeare", 
         block_size=SEQ_LEN, 
         device="cpu", 
-        start_pc=0.99, 
+        start_pc=0.9,
         end_pc=1.0
     )
 
@@ -68,7 +68,6 @@ def main():
 
 
     global_batch_list = [2**15, 2**16, 2**17, 2**18]
-    global_batch_list = [2**10 * 2**4 * 4]
 
     for global_batch in global_batch_list:
         strategy = SimpleReduceStrategy(
@@ -88,7 +87,7 @@ def main():
             num_nodes=1,
             device="mps",
             batch_size=global_batch // SEQ_LEN,
-            shuffle=False,
+            shuffle=True,
             val_size=256,
             val_interval=100,
             wandb_project="DiLoCo-Batchsize-Scaling",
@@ -117,7 +116,7 @@ def main():
                 device="mps",
                 batch_size=global_batch // SEQ_LEN // K,
                 minibatch_size=32 // K,  # Gradient accumulation to ensure we can fit in memory for a 96GB machine. Make this even lower for smaller devices.
-                shuffle=False,
+                shuffle=True,
                 val_size=256,
                 val_interval=100,
                 wandb_project="DiLoCo-Batchsize-Scaling",
