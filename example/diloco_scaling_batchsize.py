@@ -12,11 +12,11 @@ H = 30
 TOTAL_TOKENS = (2**15) * (2**13)  # 1024 steps for smallest GBS
 # TOTAL_TOKENS = (2**15) * 10  # 1024 steps for smallest GBS
 SEQ_LEN = 2**10
+BASE_BATCH_SIZE = 2**16
 
 ### PLAYGROUND
 ### This is a minimal configuration for training a nanogpt model with a given strategy.
 ### The strategy can be swapped out for custom logic by writing a new strategy class.
-
 
 def main():
     # Get datasets - this will take a while the first time, as the dataset has to be imported and processed.
@@ -67,14 +67,15 @@ def main():
     )
 
 
-    global_batch_list = [2**15, 2**16, 2**17, 2**18]
+    batch_size_multiplier_list = [1, 2, 4, 8]
 
-    for global_batch in global_batch_list:
+    for batch_size_multiplier in batch_size_multiplier_list:
+        global_batch = batch_size_multiplier * BASE_BATCH_SIZE
         strategy = SimpleReduceStrategy(
-            optim_spec=OptimSpec(torch.optim.AdamW, lr=0.001),
+            optim_spec=OptimSpec(torch.optim.AdamW, lr=0.001 * batch_size_multiplier),
             lr_scheduler="lambda_cosine",
             lr_scheduler_kwargs={
-                "warmup_steps": 1000,
+                "warmup_steps": 1024 // batch_size_multiplier,
                 "cosine_anneal": True,
             },
             max_norm=1.0,
@@ -93,6 +94,8 @@ def main():
             wandb_project="DiLoCo-Batchsize-Scaling",
             run_name=f"ddp-batchsize{global_batch}",
         )
+
+        continue
 
         for K in [1, 2, 4]:
             strategy = DiLoCoStrategy(
