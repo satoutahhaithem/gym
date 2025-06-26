@@ -175,6 +175,8 @@ class Trainer:
         self.autocast = autocast
         self.checkpoint_interval = checkpoint_interval
 
+        assert self.val_size // self.batch_size > 0, "val_size must be geq batch_size"
+
         if hasattr(self, "kwargs"):
             self.kwargs.update(kwargs)
         else:
@@ -341,11 +343,3 @@ class LocalTrainer(Trainer):
             raise ValueError(f"Invalid device type: {self.device}")
 
         print(f"Rank {self.rank} using device {self.device}")
-
-
-# Script entry-point for CLI usage
-if __name__ == "__main__":
-    # Example usage - you'll need to adapt this to your actual configuration
-    # from exogym.config import default_config
-    # launch_ddp(default_config, num_nodes=4)
-    print("Use launch_ddp() function or Trainer.fit() for training")

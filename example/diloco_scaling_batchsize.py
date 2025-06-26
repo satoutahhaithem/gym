@@ -93,7 +93,7 @@ def main():
             device="mps",
             batch_size=global_batch // SEQ_LEN,
             shuffle=True,
-            val_size=256,
+            val_size=512,
             val_interval=100,
             wandb_project="DiLoCo-Batchsize-Scaling",
             run_name=f"ddp-batchsize{global_batch}",
