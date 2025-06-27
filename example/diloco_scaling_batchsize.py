@@ -101,7 +101,7 @@ def main():
 
         for K in [1, 2, 4]:
             strategy = DiLoCoStrategy(
-                optim_spec=OptimSpec(torch.optim.AdamW, lr=0.001),
+                optim_spec=OptimSpec(torch.optim.AdamW, lr=0.001 * batch_size_multiplier),
                 lr_scheduler="lambda_cosine",
                 lr_scheduler_kwargs={
                     "warmup_steps": 1024 // batch_size_multiplier,
