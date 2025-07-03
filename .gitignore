@@ -10,3 +10,4 @@ results/
 dist/
 exogym.egg-info/
 logs/
+Dockerfile
