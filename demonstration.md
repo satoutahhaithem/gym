@@ -39,3 +39,21 @@ python3 example/mnist.py
 ```
 
 This will start the training process using the settings defined in the `example/mnist.py` script. In our case, we have modified this script to use the `DiLoCoStrategy` with 2 nodes.
+
+---
+
+### Benchmarking the Training Strategies
+
+This repository supports several distributed training strategies. Here's a comparison of the three that are configured in the `mnist.py` example:
+
+| Strategy | Communication Method | Key Characteristics |
+| :--- | :--- | :--- |
+| **SimpleReduce (AllReduce)** | Dense | Communicates all model parameters at every step. This is the most straightforward but also the most communication-intensive method. It serves as a good baseline for accuracy. |
+| **DiLoCo** | Compressed | Communicates a compressed, low-rank approximation of the model updates. This significantly reduces the amount of data sent over the network, leading to faster training, especially with a large number of nodes. |
+| **SPARTA** | Sparse | Communicates only a small, randomly selected subset of the model parameters at each step. This is another effective way to reduce communication overhead, but the random selection can introduce some variability into the training process. |
+
+In general, you can expect to see the following trade-offs:
+
+*   **Training Time:** `SimpleReduce` will likely be the slowest, while `DiLoCo` and `SPARTA` will be faster due to their reduced communication overhead.
+*   **Accuracy:** `SimpleReduce` may achieve the highest accuracy since it uses the full, uncompressed model information. `DiLoCo` and `SPARTA` are designed to minimize the impact on accuracy, but there can be a slight trade-off.
+*   **Network Usage:** `SimpleReduce` will use the most network bandwidth, while `DiLoCo` and `SPARTA` will use significantly less.
