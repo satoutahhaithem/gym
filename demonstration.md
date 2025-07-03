@@ -39,3 +39,21 @@ python3 example/mnist.py
 ```
 
 This will start the training process using the settings defined in the `example/mnist.py` script. In our case, we have modified this script to use the `DiLoCoStrategy` with 2 nodes.
+
+---
+
+### Benchmarking Results
+
+Here is a comparison of the results from the three training strategies:
+
+| Strategy | Final Loss | Training Time |
+| :--- | :--- | :--- |
+| **SimpleReduce (AllReduce)** | 0.0601 | 3 minutes 27 seconds |
+| **SPARTA** | 0.0493 | 3 minutes 30 seconds |
+| **DiLoCo** | 0.0197 | 3 minutes 9 seconds |
+
+**Analysis:**
+
+*   **DiLoCo** was the fastest and achieved the lowest final loss, making it the most efficient and effective strategy in this test.
+*   **SPARTA** was slightly slower than DiLoCo and had a higher final loss.
+*   **SimpleReduce** was the slowest and had the highest final loss, which is expected as it is the most communication-intensive and serves as a baseline.
