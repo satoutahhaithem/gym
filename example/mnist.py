@@ -1,6 +1,6 @@
 # mnist_compare_strategies_big.py  (2-space indent preserved ✨)
 from exogym.trainer import LocalTrainer
-from exogym.strategy.demo import DeMoStrategy
+from exogym.strategy.strategy import SimpleReduceStrategy
 from exogym.strategy.optim import OptimSpec
 
 import torch
