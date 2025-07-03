@@ -170,7 +170,6 @@ class TrainNode(LogModule):
             if param.requires_grad:
                 param.grad /= self.batch_size / self.minibatch_size
 
-        print(f"Rank {self.rank}: Epoch {self.epoch}, Step {self.local_step}, Loss: {loss.item()}")
         self.strategy.step()
 
         if self.rank == 0:

@@ -116,8 +116,8 @@ def run_sweep():
         minibatch_size=256,
         val_size=len(val_ds),  # evaluate on the full 10 000 test set
         val_interval=10,
-        # wandb_project="mnist-compare",
         run_name=f"{name}_big",
+        log_dir="logs",
     )
 
 
