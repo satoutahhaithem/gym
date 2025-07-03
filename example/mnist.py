@@ -1,6 +1,6 @@
 # mnist_compare_strategies_big.py  (2-space indent preserved ✨)
 from exogym.trainer import LocalTrainer
-from exogym.strategy.federated_averaging import FedAvgStrategy
+from exogym.strategy.demo import DeMoStrategy
 from exogym.strategy.optim import OptimSpec
 
 import torch
@@ -93,13 +93,13 @@ if __name__ == "__main__":
     )
     optim_spec = OptimSpec(torch.optim.AdamW, lr=3e-4, weight_decay=1e-4)
 
-    name, Strat = "fedavg", FedAvgStrategy
+    name, Strat = "demo", DeMoStrategy
     model = ModelWrapper(CNN())
     trainer = LocalTrainer(model, train_ds, val_ds)
 
     strategy = Strat(
         optim_spec=optim_spec,
-        H=10,
+        lr=optim_spec.kwargs['lr'],
     )
 
     print(f"\n=== {name.upper()} ===")

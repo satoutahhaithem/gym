@@ -61,6 +61,8 @@ Here is a comparison of the results from the three training strategies:
 | **SimpleReduce (AllReduce)** | 0.0601 | 3 min 29s | 2.82it/s | 0.000030 |
 | **SPARTA** | 0.0493 | 3 min 30s | 2.80it/s | 0.000100 |
 | **DiLoCo** | 0.0197 | 3 min 9s | 3.11it/s | 0.000030 |
+| **FedAvg** | 0.0193 | 3 min 9s | 3.11it/s | 0.000000 |
+| **DeMo** | 0.0309 | 3 min 45s | 2.62it/s | 0.000000 |
 
 **Analysis:**
 
