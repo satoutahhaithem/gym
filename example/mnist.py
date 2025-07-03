@@ -95,34 +95,30 @@ def run_sweep():
     )
     optim_spec = OptimSpec(torch.optim.AdamW, lr=3e-4, weight_decay=1e-4)
 
-    for name, Strat in [
-        ("diloco", DiLoCoStrategy),
-        ("sparta", SPARTAStrategy),
-        ("simplereduce", SimpleReduceStrategy),
-    ]:
-        model = ModelWrapper(CNN())
-        trainer = LocalTrainer(model, train_ds, val_ds)
+    name, Strat = "diloco", DiLoCoStrategy
+    model = ModelWrapper(CNN())
+    trainer = LocalTrainer(model, train_ds, val_ds)
 
-        strategy = Strat(
-            optim_spec=optim_spec,
-            H=10,
-            lr_scheduler="lambda_cosine",
-            lr_scheduler_kwargs={"warmup_steps": 100, "cosine_anneal": True},
-        )
+    strategy = Strat(
+        optim_spec=optim_spec,
+        H=10,
+        lr_scheduler="lambda_cosine",
+        lr_scheduler_kwargs={"warmup_steps": 100, "cosine_anneal": True},
+    )
 
-        print(f"\n=== {name.upper()} ===")
-        trainer.fit(
-            num_epochs=5,
-            strategy=strategy,
-            num_nodes=4,
-            device=device,
-            batch_size=256,  # larger batch is fine with this model
-            minibatch_size=256,
-            val_size=len(val_ds),  # evaluate on the full 10 000 test set
-            val_interval=10,
-            # wandb_project="mnist-compare",
-            run_name=f"{name}_big",
-        )
+    print(f"\n=== {name.upper()} ===")
+    trainer.fit(
+        num_epochs=5,
+        strategy=strategy,
+        num_nodes=2,
+        device=device,
+        batch_size=256,  # larger batch is fine with this model
+        minibatch_size=256,
+        val_size=len(val_ds),  # evaluate on the full 10 000 test set
+        val_interval=10,
+        # wandb_project="mnist-compare",
+        run_name=f"{name}_big",
+    )
 
 
 if __name__ == "__main__":

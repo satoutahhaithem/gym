@@ -108,7 +108,13 @@ def _average_model_states(model_states: Dict[int, OrderedDict]) -> OrderedDict:
             [state[param_name] for state in model_states.values()]
         )
         # Average them
-        averaged_state[param_name] = torch.mean(param_stack, dim=0)
+        if param_stack.dtype.is_floating_point or param_stack.dtype.is_complex:
+            averaged_state[param_name] = torch.mean(param_stack, dim=0)
+        else:
+            # For integer types, cast to float for mean, then cast back.
+            averaged_state[param_name] = torch.mean(param_stack.float(), dim=0).to(
+                param_stack.dtype
+            )
 
     return averaged_state
 
@@ -145,7 +151,7 @@ class Trainer:
         num_nodes: int,
         max_steps: int = None,
         device: str = None,
-        devices: list[int] = None,
+        devices: List[int] = None,
         batch_size: int = 16,
         minibatch_size: int = 16,
         shuffle: bool = True,

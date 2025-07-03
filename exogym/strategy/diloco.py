@@ -60,14 +60,17 @@ class DiLoCoStrategy(Strategy):
 
         # Outer step if needed.
         if self.local_step % self.H == 0 and self.local_step > 0:
+            print(f"Rank {self.rank}: Averaging models at step {self.local_step}")
             self._average_models()
 
             if self.rank == 0:
+                print(f"Rank {self.rank}: Performing outer optimization step")
                 self.outer_optimizer.zero_grad()
                 self._set_master_grad()
                 self.outer_optimizer.step()
                 self._synchronize_master_model()
 
+            print(f"Rank {self.rank}: Broadcasting model parameters")
             self._broadcast_model_params()
 
         super().step()

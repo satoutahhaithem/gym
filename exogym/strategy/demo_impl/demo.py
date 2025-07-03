@@ -140,7 +140,7 @@ class DeMo(torch.optim.SGD):
         return sparse_idx_list, sparse_val_list
 
     @torch.no_grad()
-    def step(self, closure: Callable | None = None):
+    def step(self, closure: Optional[Callable] = None):
 
         self.data_transmit = 0
         self.data_receive = 0
