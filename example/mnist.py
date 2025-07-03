@@ -95,7 +95,7 @@ def run_sweep():
     )
     optim_spec = OptimSpec(torch.optim.AdamW, lr=3e-4, weight_decay=1e-4)
 
-    name, Strat = "sparta", SPARTAStrategy
+    name, Strat = "simplereduce", SimpleReduceStrategy
     model = ModelWrapper(CNN())
     trainer = LocalTrainer(model, train_ds, val_ds)
 
