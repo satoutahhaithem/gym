@@ -42,6 +42,16 @@ This will start the training process using the settings defined in the `example/
 
 ---
 
+---
+
+### Machine Specifications
+
+The benchmarks were run on the following machine:
+
+*   **CPU:** Intel(R) Xeon(R) CPU E5-1620 v3 @ 3.50GHz (8 cores)
+*   **GPU:** Quadro RTX 6000
+*   **RAM:** 31Gi
+
 ### Benchmarking Results
 
 Here is a comparison of the results from the three training strategies:
