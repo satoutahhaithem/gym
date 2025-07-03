@@ -56,11 +56,11 @@ The benchmarks were run on the following machine:
 
 Here is a comparison of the results from the three training strategies:
 
-| Strategy | Final Loss | Training Time |
-| :--- | :--- | :--- |
-| **SimpleReduce (AllReduce)** | 0.0601 | 3 minutes 27 seconds |
-| **SPARTA** | 0.0493 | 3 minutes 30 seconds |
-| **DiLoCo** | 0.0197 | 3 minutes 9 seconds |
+| Strategy | Final Loss | Training Time | Iterations/sec | Final LR |
+| :--- | :--- | :--- | :--- | :--- |
+| **SimpleReduce (AllReduce)** | 0.0601 | 3 min 29s | 2.82it/s | 0.000030 |
+| **SPARTA** | 0.0493 | 3 min 30s | 2.80it/s | 0.000100 |
+| **DiLoCo** | 0.0197 | 3 min 9s | 3.11it/s | 0.000030 |
 
 **Analysis:**
 
