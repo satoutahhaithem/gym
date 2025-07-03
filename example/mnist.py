@@ -1,8 +1,6 @@
 # mnist_compare_strategies_big.py  (2-space indent preserved ✨)
 from exogym.trainer import LocalTrainer
-from exogym.strategy.diloco import DiLoCoStrategy
-from exogym.strategy.sparta import SPARTAStrategy
-from exogym.strategy.strategy import SimpleReduceStrategy
+from exogym.strategy.federated_averaging import FedAvgStrategy
 from exogym.strategy.optim import OptimSpec
 
 import torch
@@ -78,7 +76,7 @@ class ModelWrapper(nn.Module):
 
 
 # ── 4. Training sweep ─────────────────────────────────────────────────────────
-def run_sweep():
+if __name__ == "__main__":
     train_ds, _ = get_mnist_splits()
     val_ds = datasets.MNIST(
         "data",
@@ -95,15 +93,13 @@ def run_sweep():
     )
     optim_spec = OptimSpec(torch.optim.AdamW, lr=3e-4, weight_decay=1e-4)
 
-    name, Strat = "diloco", DiLoCoStrategy
+    name, Strat = "fedavg", FedAvgStrategy
     model = ModelWrapper(CNN())
     trainer = LocalTrainer(model, train_ds, val_ds)
 
     strategy = Strat(
         optim_spec=optim_spec,
         H=10,
-        lr_scheduler="lambda_cosine",
-        lr_scheduler_kwargs={"warmup_steps": 100, "cosine_anneal": True},
     )
 
     print(f"\n=== {name.upper()} ===")
@@ -112,14 +108,10 @@ def run_sweep():
         strategy=strategy,
         num_nodes=2,
         device=device,
-        batch_size=256,  # larger batch is fine with this model
+        batch_size=256,
         minibatch_size=256,
-        val_size=len(val_ds),  # evaluate on the full 10 000 test set
+        val_size=len(val_ds),
         val_interval=10,
-        # wandb_project="mnist-compare",
         run_name=f"{name}_big",
+        log_dir="logs",
     )
-
-
-if __name__ == "__main__":
-    run_sweep()
