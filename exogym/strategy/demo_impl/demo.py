@@ -168,12 +168,12 @@ class DeMo(torch.optim.SGD):
 
                 # Compress delta
                 sparse_idx, sparse_val, xshape, totalk = self.compress.compress(
-                    self.transform.encode(state["delta"]), self.compression_topk
+                    self.transform.encode(state["delta"], p), self.compression_topk
                 )
 
                 # Estimate transmitted delta
                 transmit_grad = self.transform.decode(
-                    self.compress.decompress(p, sparse_idx, sparse_val, xshape, totalk)
+                    self.compress.decompress(p, sparse_idx, sparse_val, xshape, totalk), p
                 )
 
                 # Remove transmitted from delta
@@ -193,7 +193,7 @@ class DeMo(torch.optim.SGD):
                 new_grad = self.transform.decode(
                     self.compress.batch_decompress(
                         p, sparse_idx_gather, sparse_val_gather, xshape, totalk
-                    )
+                    ), p
                 )
 
                 # Set grad to values
@@ -252,53 +252,50 @@ class TransformDCT:
             return torch.einsum("...ijkl, kb, ld -> ...ibjd", x, b, d)
 
     @torch.no_grad()
-    def encode(self, x):
-
-        if len(x.shape) > 1:  # 2D weights
+    def encode(self, x, p):
+        if len(p.shape) == 4: # 4D weights (e.g. conv kernels)
+            # For 4D tensors, we don't need to rearrange before the einsum
+            n1, n2 = self.shape_dict[x.shape[2]], self.shape_dict[x.shape[3]]
+            n1w, n2w = self.f_dict[n1].to(x.device), self.f_dict[n2].to(x.device)
+            x = torch.einsum('b c h w, h i, w j -> b c i j', x, n1w, n2w)
+        elif len(p.shape) > 1:  # 2D weights
             n1 = self.shape_dict[x.shape[0]]
             n2 = self.shape_dict[x.shape[1]]
             n1w = self.f_dict[n1].to(x.device)
             n2w = self.f_dict[n2].to(x.device)
             self.f_dict[n1] = n1w
             self.f_dict[n2] = n2w
-
-            # print(x.shape)
-            # print(n1, n2)
             x = rearrange(x, "(y h) (x w) -> y h x w", h=n1, w=n2)
             x = self.einsum_2d(x, n1w, n2w)
-
         else:  # 1D weights
             n1 = self.shape_dict[x.shape[0]]
             n1w = self.f_dict[n1].to(x.device)
             self.f_dict[n1] = n1w
-
             x = rearrange(x, "(x w) -> x w", w=n1)
             x = self.einsum_2d(x, n1w)
-
         return x
 
     @torch.no_grad()
-    def decode(self, x):
-
-        if len(x.shape) > 2:  # 2D weights
+    def decode(self, x, p):
+        if len(p.shape) == 4: # 4D weights
+            n1, n2 = x.shape[2], x.shape[3]
+            n1w, n2w = self.b_dict[n1].to(x.device), self.b_dict[n2].to(x.device)
+            x = torch.einsum('b c i j, i h, j w -> b c h w', x, n1w, n2w)
+        elif len(p.shape) > 1:  # 2D weights
             n1 = x.shape[2]
             n2 = x.shape[3]
             n1w = self.b_dict[n1].to(x.device)
             n2w = self.b_dict[n2].to(x.device)
             self.b_dict[n1] = n1w
             self.b_dict[n2] = n2w
-
             x = self.einsum_2d_t(x, n1w, n2w)
             x = rearrange(x, "y h x w -> (y h) (x w)")
-
         else:  # 1D weights
             n1 = x.shape[1]
             n1w = self.b_dict[n1].to(x.device)
             self.b_dict[n1] = n1w
-
             x = self.einsum_2d_t(x, n1w)
             x = rearrange(x, "x w -> (x w)")
-
         return x
 
 

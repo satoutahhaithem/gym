@@ -57,3 +57,31 @@ In general, you can expect to see the following trade-offs:
 *   **Training Time:** `SimpleReduce` will likely be the slowest, while `DiLoCo` and `SPARTA` will be faster due to their reduced communication overhead.
 *   **Accuracy:** `SimpleReduce` may achieve the highest accuracy since it uses the full, uncompressed model information. `DiLoCo` and `SPARTA` are designed to minimize the impact on accuracy, but there can be a slight trade-off.
 *   **Network Usage:** `SimpleReduce` will use the most network bandwidth, while `DiLoCo` and `SPARTA` will use significantly less.
+
+---
+
+### Machine Specifications
+
+The benchmarks were run on the following machine:
+
+*   **CPU:** Intel(R) Xeon(R) CPU E5-1620 v3 @ 3.50GHz (8 cores)
+*   **GPU:** Quadro RTX 6000
+*   **RAM:** 31Gi
+
+### Benchmarking Results
+
+Here is a comparison of the results from the three training strategies:
+
+| Strategy | Final Loss | Training Time | Iterations/sec | Final LR |
+| :--- | :--- | :--- | :--- | :--- |
+| **SimpleReduce (AllReduce)** | 0.0601 | 3 min 29s | 2.82it/s | 0.000030 |
+| **SPARTA** | 0.0493 | 3 min 30s | 2.80it/s | 0.000100 |
+| **DiLoCo** | 0.0197 | 3 min 9s | 3.11it/s | 0.000030 |
+| **FedAvg** | 0.0193 | 3 min 9s | 3.11it/s | 0.000000 |
+| **DeMo** | 0.0309 | 3 min 45s | 2.62it/s | 0.000000 |
+
+**Analysis:**
+
+*   **DiLoCo** was the fastest and achieved the lowest final loss, making it the most efficient and effective strategy in this test.
+*   **SPARTA** was slightly slower than DiLoCo and had a higher final loss.
+*   **SimpleReduce** was the slowest and had the highest final loss, which is expected as it is the most communication-intensive and serves as a baseline.

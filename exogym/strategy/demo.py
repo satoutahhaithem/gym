@@ -34,6 +34,7 @@ class DeMoStrategy(Strategy):
             "compression_chunk": self.compression_chunk,
             "weight_decay": self.weight_decay,
             "custom_all_gather": all_gather,
+            "lr": self.kwargs.get("lr", 0.001),
         }
 
         # Add any additional optimizer kwargs from strategy config if they exist
